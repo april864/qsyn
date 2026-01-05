@@ -8,12 +8,12 @@
 #pragma once
 
 #include "cli/cli.hpp"
-#include "cmd/hamiltonian_mgr.hpp"
+#include "cmd/qbham_mgr.hpp"
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command hamiltonian_cmd(QubitHamiltonianMgr& hamiltonian_mgr);
+dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr);
 
-bool add_hamiltonian_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& hamiltonian_mgr);
+bool add_qbham_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& qbham_mgr);
 
 }  // namespace qsyn::hamiltonian

@@ -4,7 +4,7 @@
   Author       [ Mu-Te Lau (joshmtlau) ]
 */
 
-#include "./hamiltonian_test.hpp"
+#include "./trotterize.hpp"
 
 #include "hamiltonian/qubit_hamiltonian.hpp"
 #include "hamiltonian/trotterize.hpp"
@@ -16,7 +16,7 @@ using dvlab::Command;
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command hamiltonian_trotterize_cmd(QubitHamiltonianMgr const& hamiltonian_mgr) {
+dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr) {
     return Command(
         "trotterize",
         [](ArgumentParser& parser) {
@@ -29,11 +29,11 @@ dvlab::Command hamiltonian_trotterize_cmd(QubitHamiltonianMgr const& hamiltonian
                 .help("Number of steps to trotterize for");
         },
         [&](ArgumentParser const& parser) {
-            if (!dvlab::utils::mgr_has_data(hamiltonian_mgr)) {
+            if (!dvlab::utils::mgr_has_data(qbham_mgr)) {
                 return CmdExecResult::error;
             }
 
-            auto const* hamiltonian = hamiltonian_mgr.get();
+            auto const* hamiltonian = qbham_mgr.get();
             fmt::println("Hamiltonian: {}", hamiltonian->to_string());
 
             auto time    = parser.get<double>("time");

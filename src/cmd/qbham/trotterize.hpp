@@ -7,10 +7,10 @@
 #pragma once
 
 #include "cli/cli.hpp"
-#include "cmd/hamiltonian_mgr.hpp"
+#include "cmd/qbham_mgr.hpp"
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command hamiltonian_trotterize_cmd(QubitHamiltonianMgr const& hamiltonian_mgr);
+dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr);
 
 }  // namespace qsyn::hamiltonian
