@@ -20,6 +20,7 @@
 #include "cmd/device_cmd.hpp"
 #include "cmd/duostra_cmd.hpp"
 #include "cmd/extractor_cmd.hpp"
+#include "cmd/hamiltonian/hamiltonian_test.hpp"
 #include "cmd/qcir_cmd.hpp"
 #include "cmd/tableau_cmd.hpp"
 #include "cmd/tensor_cmd.hpp"
@@ -137,7 +138,8 @@ bool initialize_qsyn(
            qsyn::qcir::add_qcir_cmds(cli, qcir_mgr) &&
            qsyn::tensor::add_tensor_cmds(cli, tensor_mgr) &&
            qsyn::zx::add_zx_cmds(cli, zxgraph_mgr) &&
-           qsyn::tableau::add_tableau_command(cli, tableau_mgr);
+           qsyn::tableau::add_tableau_command(cli, tableau_mgr) &&
+           qsyn::hamiltonian::add_hamiltonian_test_cmds(cli);
 }
 
 dvlab::argparse::ArgumentParser get_qsyn_parser(std::string_view const prog_name) {
