@@ -61,12 +61,13 @@ QubitHamiltonianTerm::cx(size_t control, size_t target) noexcept {
     return *this;
 }
 
-QubitHamiltonian::QubitHamiltonian(size_t n_qubits) : _n_qubits(n_qubits) {}
+QubitHamiltonian::QubitHamiltonian(size_t n_qubits) : _n_qubits(n_qubits), _filename("") {}
 
 QubitHamiltonian::QubitHamiltonian(
     std::initializer_list<QubitHamiltonianTerm> const& terms)
     : _terms(terms),
-      _n_qubits(_terms.begin()->n_qubits()) {}
+      _n_qubits(_terms.begin()->n_qubits()),
+      _filename("") {}
 
 QubitHamiltonian&
 QubitHamiltonian::h(size_t qubit) noexcept {

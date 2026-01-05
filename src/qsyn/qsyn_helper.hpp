@@ -11,6 +11,7 @@
 
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"
+#include "cmd/hamiltonian_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"
@@ -21,7 +22,8 @@ namespace qsyn {
 bool read_qsynrc_file(dvlab::CommandLineInterface& cli, std::filesystem::path qsynrc_path);
 bool initialize_qsyn(dvlab::CommandLineInterface& cli, qsyn::device::DeviceMgr& device_mgr,
                      qsyn::qcir::QCirMgr& qcir_mgr, qsyn::tensor::TensorMgr& tensor_mgr,
-                     qsyn::zx::ZXGraphMgr& zxgraph_mgr, qsyn::tableau::TableauMgr& tableau_mgr);
+                     qsyn::zx::ZXGraphMgr& zxgraph_mgr, qsyn::tableau::TableauMgr& tableau_mgr,
+                     qsyn::hamiltonian::QubitHamiltonianMgr& hamiltonian_mgr);
 dvlab::argparse::ArgumentParser get_qsyn_parser(std::string_view prog_name);
 
 }  // namespace qsyn

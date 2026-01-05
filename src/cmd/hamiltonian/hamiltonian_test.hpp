@@ -7,8 +7,10 @@
 #pragma once
 
 #include "cli/cli.hpp"
+#include "cmd/hamiltonian_mgr.hpp"
 
 namespace qsyn::hamiltonian {
 
-bool add_hamiltonian_test_cmds(dvlab::CommandLineInterface& cli);
+dvlab::Command hamiltonian_trotterize_cmd(QubitHamiltonianMgr const& hamiltonian_mgr);
+
 }  // namespace qsyn::hamiltonian
