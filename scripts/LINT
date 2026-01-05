@@ -31,6 +31,28 @@ echo "Formatting files..."
 parallel -j"$(num_procs)" format_one ::: "$FILES"
 echo "Generating compile commands..."
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=1 > /dev/null
+
+# Create a temporary build directory for linting with sanitized compile commands
+LINT_BUILD_DIR=$(mktemp -d)
+export LINT_BUILD_DIR
+trap "rm -rf '$LINT_BUILD_DIR'" EXIT
+
+# Copy and sanitize compile_commands.json for clang-tidy
+# Remove GCC-specific flags that clang-tidy doesn't recognize
+if [ -f build/compile_commands.json ]; then
+    if ! command -v python3 &> /dev/null; then
+        echo "Error: python3 is required but not found. Please install python3."
+        exit 1
+    fi
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    python3 "$SCRIPT_DIR/sanitize_compile_commands.py" \
+        build/compile_commands.json \
+        "$LINT_BUILD_DIR/compile_commands.json"
+else
+    echo "Warning: compile_commands.json not found"
+    exit 1
+fi
+
 echo "Linting files..."
 parallel -j"$(num_procs)" lint_one ::: "$CPPS"
 echo "Done"
