@@ -11,6 +11,7 @@
 
 #include "argparse/arg_parser.hpp"
 #include "cli/cli.hpp"
+#include "cmd/qbham/sort.hpp"
 #include "cmd/qbham/trotterize.hpp"
 #include "cmd/qbham_mgr.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
@@ -52,6 +53,7 @@ dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr) {
     // cmd.add_subcommand("qbham-cmd-group", qbham_write_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_print_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_trotterize_cmd(qbham_mgr));
+    cmd.add_subcommand("qbham-cmd-group", qbham_sort_cmd(qbham_mgr));
 
     return cmd;
 }
