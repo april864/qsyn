@@ -17,12 +17,14 @@ using QubitHamiltonianMgr = dvlab::utils::DataStructureManager<QubitHamiltonian>
 }  // namespace qsyn::hamiltonian
 
 template <>
-inline std::string dvlab::utils::data_structure_info_string(qsyn::hamiltonian::QubitHamiltonian const& t) {
-    return fmt::format("{:<19} {}", t.get_filename().substr(0, 19),
-                       fmt::join(t.get_procedures(), " ➔ "));
+inline std::string dvlab::utils::data_structure_info_string(
+    dvlab::utils::DataStructureManager<qsyn::hamiltonian::QubitHamiltonian> const& mgr, size_t id) {
+    return fmt::format("{:<19} {}", mgr.get_filename(id).substr(0, 19),
+                       fmt::join(mgr.get_procedures(id), " ➔ "));
 }
 
 template <>
-inline std::string dvlab::utils::data_structure_name(qsyn::hamiltonian::QubitHamiltonian const& t) {
-    return t.get_filename();
+inline std::string dvlab::utils::data_structure_name(
+    dvlab::utils::DataStructureManager<qsyn::hamiltonian::QubitHamiltonian> const& mgr, size_t id) {
+    return mgr.get_filename(id);
 }
