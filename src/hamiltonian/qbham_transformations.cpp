@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <cmath>
 
 #include "./qubit_hamiltonian.hpp"
 
@@ -102,6 +103,23 @@ bool is_valid_pauli_letter_order(std::string_view order_str) {
 
 void lexicographic_sort(QubitHamiltonian& hamilt) {
     lexicographic_sort(hamilt, "xyzi");
+}
+
+/**
+ * @brief Sort the Pauli terms of a QubitHamiltonian in order of decreasing magnitude.
+ *        For example, the Pauli term "(1/2)XZ" will be sorted before "(1/4)YZ".
+ *
+ * @param hamilt The QubitHamiltonian to sort.
+ */
+void magnitude_sort(QubitHamiltonian& hamilt) {
+    auto const compare_term_magnitudes =
+        [](QubitHamiltonianTerm const& a, QubitHamiltonianTerm const& b) {
+            double a_magnitude = std::abs(a.coeff());
+            double b_magnitude = std::abs(b.coeff());
+            return a_magnitude > b_magnitude;
+        };
+
+    std::ranges::sort(hamilt, compare_term_magnitudes);
 }
 
 }  // namespace qsyn::hamiltonian

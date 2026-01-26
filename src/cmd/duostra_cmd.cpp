@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <gsl/util>
 #include <string>
+#include <cstdint>
+#include <optional>
 
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"

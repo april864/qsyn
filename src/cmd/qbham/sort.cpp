@@ -25,8 +25,8 @@ dvlab::Command qbham_sort_cmd(QubitHamiltonianMgr const& qbham_mgr) {
             parser.add_argument<std::string>("strategy")
                 .help(
                     "The sorting strategy to use. "
-                    "Currently, only 'lex' is supported.")
-                .constraint(choices_allow_prefix({"lex"}));
+                    "Currently, only 'lex' and 'magnitude' are supported.")
+                .constraint(choices_allow_prefix({"lex", "magnitude"}));
 
             parser.add_argument<std::string>("--order")
                 .help(
@@ -49,6 +49,8 @@ dvlab::Command qbham_sort_cmd(QubitHamiltonianMgr const& qbham_mgr) {
 
             if (strategy == "lex") {
                 lexicographic_sort(*qbham_mgr.get(), order_str);
+            } else if (strategy == "magnitude") {
+                magnitude_sort(*qbham_mgr.get());
             }
 
             fmt::println("Hamiltonian after sorting:\n{}",
