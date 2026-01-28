@@ -47,7 +47,7 @@ dvlab::Command qbham_sort_cmd(QubitHamiltonianMgr const& qbham_mgr) {
             auto const strategy  = parser.get<std::string>("strategy");
             auto const order_str = parser.get<std::string>("--order");
 
-            if (strategy == "lex") {
+            if (dvlab::str::is_prefix_of(strategy, "lex")) {
                 lexicographic_sort(*qbham_mgr.get(), order_str);
             }
 
