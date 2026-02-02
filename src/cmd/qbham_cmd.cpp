@@ -13,6 +13,7 @@
 #include "cli/cli.hpp"
 #include "cmd/qbham/sort.hpp"
 #include "cmd/qbham/trotterize.hpp"
+#include "cmd/qbham/read.hpp"
 #include "cmd/qbham_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
@@ -50,7 +51,7 @@ dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& ta
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_delete_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_checkout_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_copy_cmd(qbham_mgr));
-    // cmd.add_subcommand("qbham-cmd-group", qbham_read_cmd(qbham_mgr));
+    cmd.add_subcommand("qbham-cmd-group", qbham_read_cmd(qbham_mgr));
     // cmd.add_subcommand("qbham-cmd-group", qbham_write_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_print_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_trotterize_cmd(qbham_mgr, tableau_mgr));
@@ -64,22 +65,7 @@ bool add_qbham_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& qbham
         spdlog::error("Registering \"qbham\" commands fails... exiting");
         return false;
     }
-
-    // for now, add some test hamiltonians
-
-    qbham_mgr.add(0, std::make_unique<QubitHamiltonian>(2));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("XX", 2.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("ZZ", 3.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("YY", 4.0));
-
-    qbham_mgr.add(1, std::make_unique<QubitHamiltonian>(2));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("XX", 2.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("XZ", 3.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("ZI", 4.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("IZ", 5.0));
-    qbham_mgr.get()->add_term(QubitHamiltonianTerm("YX", 6.0));
-
-    qbham_mgr.checkout(0);
+    
     return true;
 }
 

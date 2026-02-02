@@ -1,0 +1,5 @@
+2 XX
+3 XZ
+4 ZI
+5 IZ
+6 YX
