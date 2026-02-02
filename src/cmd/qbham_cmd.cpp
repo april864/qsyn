@@ -15,6 +15,7 @@
 #include "cmd/qbham/trotterize.hpp"
 #include "cmd/qbham/read.hpp"
 #include "cmd/qbham_mgr.hpp"
+#include "cmd/tableau_mgr.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 
@@ -42,7 +43,7 @@ dvlab::Command qbham_print_cmd(QubitHamiltonianMgr const& qbham_mgr) {
         }};
 }
 
-dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr) {
+dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(qbham_mgr);
 
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_list_cmd(qbham_mgr));
@@ -53,14 +54,14 @@ dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr) {
     cmd.add_subcommand("qbham-cmd-group", qbham_read_cmd(qbham_mgr));
     // cmd.add_subcommand("qbham-cmd-group", qbham_write_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_print_cmd(qbham_mgr));
-    cmd.add_subcommand("qbham-cmd-group", qbham_trotterize_cmd(qbham_mgr));
+    cmd.add_subcommand("qbham-cmd-group", qbham_trotterize_cmd(qbham_mgr, tableau_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_sort_cmd(qbham_mgr));
 
     return cmd;
 }
 
-bool add_qbham_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& qbham_mgr) {
-    if (!cli.add_command(qbham_cmd(qbham_mgr))) {
+bool add_qbham_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr) {
+    if (!cli.add_command(qbham_cmd(qbham_mgr, tableau_mgr))) {
         spdlog::error("Registering \"qbham\" commands fails... exiting");
         return false;
     }

@@ -6,8 +6,11 @@
 
 #include "./trotterize.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include "hamiltonian/qubit_hamiltonian.hpp"
 #include "hamiltonian/trotterize.hpp"
+#include "tableau/tableau.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 
 using namespace dvlab::argparse;
@@ -16,7 +19,7 @@ using dvlab::Command;
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr) {
+dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr, tableau::TableauMgr& tableau_mgr) {
     return Command(
         "trotterize",
         [](ArgumentParser& parser) {
@@ -46,6 +49,11 @@ dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr) {
             for (auto const& pr : prtabl) {
                 fmt::println("PauliRotation: {}", pr.to_string());
             }
+
+            // Add the trotterization result as a tableau
+            auto const tableau_id = tableau_mgr.get_next_id();
+            tableau_mgr.add(tableau_id, std::make_unique<tableau::Tableau>(std::initializer_list<tableau::SubTableau>{prtabl}));
+            spdlog::info("Added Trotterization result to Tableau {}", tableau_id);
 
             return CmdExecResult::done;
         });
