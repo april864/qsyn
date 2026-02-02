@@ -307,7 +307,7 @@ target_compile_definitions(
 target_compile_definitions(
     ${CMAKE_PROJECT_NAME} PRIVATE QSYN_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 target_compile_options(
-    ${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra) #-Werror)
+    ${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
 
 # compilers are being too paranoid about missing field initializers
 target_compile_options(
@@ -389,7 +389,7 @@ target_link_libraries_system(
 target_compile_options(
     ${UNIT_TEST_NAME}
     PRIVATE 
-    -Wall -Wextra) #-Werror)
+    -Wall -Wextra -Werror)
 
 # compilers are being too paranoid about missing field initializers
 target_compile_options(
