@@ -1,0 +1,20 @@
+[project]
+name = "qsyn"
+version = "0.1.0"
+description = "Quantum circuit synthesis and optimization toolkit"
+requires-python = ">=3.12"
+dependencies = [
+    "qiskit>=2.3.0",
+    "qiskit-ibm-runtime>=0.45.0",
+    "pylatexenc>=2.10",
+    "matplotlib>=3.8.0",
+    "pillow>=12.1.0",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.hatch.build.targets.wheel]
+# This is a C++ project with Python helper scripts, not a Python package
+# Skip packaging by specifying empty packages list
+packages = []

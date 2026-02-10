@@ -69,7 +69,7 @@ dvlab::Command qbham_read_cmd(QubitHamiltonianMgr& qbham_mgr) {
             // Create Hamiltonian
             auto hamilt = std::make_unique<QubitHamiltonian>(n_qubits);
             for (auto const& [coeff, pauli_str] : terms) {
-                hamilt->add_term(QubitHamiltonianTerm(pauli_str, coeff)); 
+                hamilt->add_term(QubitHamiltonianTerm(pauli_str, coeff));
             }
 
             size_t new_id = qbham_mgr.get_next_id();
@@ -77,6 +77,8 @@ dvlab::Command qbham_read_cmd(QubitHamiltonianMgr& qbham_mgr) {
             qbham_mgr.add(new_id, std::move(hamilt));
 
             qbham_mgr.checkout(new_id);
+
+            qbham_mgr.set_filename(filepath);
 
             return CmdExecResult::done;
         });

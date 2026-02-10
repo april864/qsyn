@@ -18,6 +18,7 @@
 
 #include "./qcir/optimizer_cmd.hpp"
 #include "./qcir/oracle_cmd.hpp"
+#include "./qcir/transpile_qiskit_cmd.hpp"
 #include "argparse/arg_parser.hpp"
 #include "argparse/arg_type.hpp"
 #include "cli/cli.hpp"
@@ -679,6 +680,7 @@ Command qcir_cmd(QCirMgr& qcir_mgr) {
     cmd.add_subcommand("qcir-cmd-group", qcir_oracle_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_equiv_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_to_basic_cmd(qcir_mgr));
+    cmd.add_subcommand("qcir-cmd-group", qcir_transpile_qiskit_cmd(qcir_mgr));
     return cmd;
 }
 

@@ -1,0 +1,23 @@
+//!ARGS INPUT OUTPUT
+qbham read ${INPUT}
+qbham print
+
+// sort your terms for better circuits
+qbham sort magnitude
+
+// trotterize the Hamiltonian to a tableau
+qbham trotterize 0.1 10
+tableau print
+
+// latest tableau -> qcir algorithm
+tableau opt collapse
+convert tableau qcir -s unified -r pmst
+
+qcir print --gates
+
+// to map to a device
+device read benchmark/topology/guadalupe_16.layout
+duostra
+
+// to write circuit
+qcir write ${OUTPUT}

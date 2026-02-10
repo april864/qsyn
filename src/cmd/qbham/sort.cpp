@@ -49,7 +49,7 @@ dvlab::Command qbham_sort_cmd(QubitHamiltonianMgr const& qbham_mgr) {
 
             if (dvlab::str::is_prefix_of(strategy, "lex")) {
                 lexicographic_sort(*qbham_mgr.get(), order_str);
-            } else if (strategy == "magnitude") {
+            } else if (dvlab::str::is_prefix_of(strategy, "magnitude")) {
                 magnitude_sort(*qbham_mgr.get());
             }
 

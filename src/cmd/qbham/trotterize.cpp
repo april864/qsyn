@@ -37,18 +37,12 @@ dvlab::Command qbham_trotterize_cmd(QubitHamiltonianMgr const& qbham_mgr, tablea
             }
 
             auto const* hamiltonian = qbham_mgr.get();
-            fmt::println("Hamiltonian: {}", hamiltonian->to_string());
 
             auto time    = parser.get<double>("time");
             auto n_steps = parser.get<size_t>("n-steps");
 
-            fmt::println("Trotterizing Hamiltonian for {} time steps of {} time", n_steps, time);
-            fmt::println("time step: {}", time / static_cast<double>(n_steps));
+            spdlog::info("Trotterizing Hamiltonian. Steps: {}, Time: {}", n_steps, time);
             auto prtabl = trotterize(*hamiltonian, time, n_steps);
-
-            for (auto const& pr : prtabl) {
-                fmt::println("PauliRotation: {}", pr.to_string());
-            }
 
             // Add the trotterization result as a tableau
             auto const tableau_id = tableau_mgr.get_next_id();
