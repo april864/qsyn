@@ -11,6 +11,7 @@
 
 #include "argparse/arg_parser.hpp"
 #include "cli/cli.hpp"
+#include "cmd/qbham/ferm_to_qubit.hpp"
 #include "cmd/qbham/sort.hpp"
 #include "cmd/qbham/trotterize.hpp"
 #include "cmd/qbham/read.hpp"
@@ -51,6 +52,7 @@ dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& ta
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_delete_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_checkout_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", dvlab::utils::mgr_copy_cmd(qbham_mgr));
+    cmd.add_subcommand("qbham-cmd-group", qbham_ferm_to_qubit_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_read_cmd(qbham_mgr));
     // cmd.add_subcommand("qbham-cmd-group", qbham_write_cmd(qbham_mgr));
     cmd.add_subcommand("qbham-cmd-group", qbham_print_cmd(qbham_mgr));
