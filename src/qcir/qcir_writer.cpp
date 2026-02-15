@@ -86,14 +86,21 @@ bool QCir::draw(QCirDrawerType drawer, std::filesystem::path const& output_path,
 
     auto const path_to_script = "scripts/qccdraw_qiskit_interface.py";
 
-    auto cmd = fmt::format("python3 {} -input {} -drawer {} -scale {}", path_to_script, tmp_qasm.string(), drawer, scale);
-    // auto cmd = fmt::format("python3 {} -input {} -drawer {} -scale {}", path_to_script, tmp_qasm.string(), drawer, scale);
+    auto args = std::vector<std::string>{
+        "-input",
+        tmp_qasm.string(),
+        "-drawer",
+        fmt::format("{}", drawer),
+        "-scale",
+        std::to_string(scale),
+    };
 
     if (!output_path.string().empty()) {
-        cmd += " -output " + output_path.string();
+        args.push_back("-output");
+        args.push_back(output_path.string());
     }
 
-    return system(cmd.c_str()) == 0;
+    return dvlab::utils::uv_run_script(path_to_script, args) == 0;
 }
 
 std::string to_qasm(QCir const& qcir) {

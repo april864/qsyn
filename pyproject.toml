@@ -9,6 +9,7 @@ dependencies = [
     "pylatexenc>=2.10",
     "matplotlib>=3.8.0",
     "pillow>=12.1.0",
+    "dotenv>=0.9.9",
 ]
 
 [dependency-groups]

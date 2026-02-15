@@ -29,4 +29,5 @@ perf.data.old
 
 # python environment
 .venv/
-
+.env
+__pycache__/
