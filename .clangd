@@ -1,0 +1,13 @@
+# Use the build dir's compile_commands.json (has correct include paths).
+CompilationDatabase: build
+
+# Fallback: clangd does not resolve relative paths in Add; use absolute paths.
+# Disable fmt consteval for clangd so format-string checks are runtime-only;
+# avoids false "not a constant expression" from Clang while the project builds with g++.
+CompileFlags:
+  Add:
+    - -DFMT_CONSTEVAL=
+    - -isystem
+    - /home/zwischen/qsyn/build/_deps/spdlog-src/include
+    - -isystem
+    - /home/zwischen/qsyn/build/_deps/fmt-src/include

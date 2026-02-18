@@ -348,7 +348,8 @@ target_link_libraries_system(
     fmt::fmt
     spdlog::spdlog
     Microsoft.GSL::GSL
-    sul::dynamic_bitset)
+    sul::dynamic_bitset
+    nlohmann_json::nlohmann_json)
 target_link_libraries(
     ${CMAKE_PROJECT_NAME} 
     PRIVATE 

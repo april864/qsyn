@@ -7,6 +7,7 @@
 
 #include "./device_cmd.hpp"
 
+#include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
 #include <memory>
@@ -14,6 +15,7 @@
 
 #include "./device_mgr.hpp"
 #include "device/device.hpp"
+#include "device/ibmq_devices.hpp"
 #include "qsyn/qsyn_type.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 #include "util/sysdep.hpp"
@@ -107,8 +109,7 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
 
 dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
     return {
-        "fetch",
-        [](ArgumentParser& parser) {
+        "fetch", [](ArgumentParser& parser) {
             parser.description(
                 "fetch and create a device. Currently only supports "
                 "IBM backends. This command tries to retrieve the device "
@@ -139,105 +140,48 @@ dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 .help(
                     "Use cached backend if available; only fetch if "
                     "a cached backend is not available. This flag is "
-                    "ignored if `--fake` is specified.");
-        },
+                    "ignored if `--fake` is specified."); },
         [&device_mgr](ArgumentParser const& parser) {
             (void)device_mgr;  // reserved for device loading when hooked up
-            auto const fake   = parser.get<bool>("--fake");
-            auto const cached = parser.get<bool>("--cached");
+            auto const backend_name = parser.get<std::string>("backend");
+            auto const fake         = parser.get<bool>("--fake");
+            auto const cached       = parser.get<bool>("--cached");
 
-            auto const [real_backend_name, fake_backend_name] = [&]() {
-                // wrapping the logic in a lambda to avoid accidental use of `backend_name`
-                auto const backend_name             = parser.get<std::string>("backend");
-                auto const backend_name_without_ibm = backend_name.starts_with("ibm_") ? backend_name.substr(4) : backend_name;
-                return std::make_tuple("ibm_" + backend_name_without_ibm, "fake_" + backend_name_without_ibm);
-            }();
-            auto tmp_dir = dvlab::utils::TmpDir();
-
-            constexpr auto script_path = "scripts/get_ibm_backend_attrs.py";
-            auto const home_dir        = dvlab::utils::get_home_directory();
+            auto const home_dir = dvlab::utils::get_home_directory();
             if (!home_dir) {
                 spdlog::error("Cannot find home directory");
                 return CmdExecResult::error;
             }
+            // set the cached directory. using make_optional to avoid copying
+            auto const cached_dir = std::make_optional((
+                std::filesystem::path(home_dir.value()) /
+                ".config/qsyn/cached_backend_attrs/"));
 
-            if (fake) {
-                auto const result =
-                    dvlab::utils::uv_run_script(
-                        script_path,
-                        {fake_backend_name,
-                         "-f",
-                         "-o",
-                         tmp_dir.path().string()});
+            auto const result = fetch_ibmq_device_attrs_with_fallback(
+                backend_name, fake, cached, cached_dir);
 
-                if (result != 0) {
-                    spdlog::error("Failed to get fake backend attributes for {}", fake_backend_name);
-                    return CmdExecResult::error;
-                } else {
-                    return CmdExecResult::done;
-                }
-            }
-
-            auto const cached_dir = std::filesystem::path(home_dir.value()) / ".config/qsyn/cached_backend_attrs/";
-
-            auto const device_file_path       = real_backend_name + ".json";
-            auto const device_file_props_path = real_backend_name + "_properties.json";
-
-            if (cached) {
-                if (std::filesystem::exists(cached_dir / device_file_path) && std::filesystem::exists(cached_dir / device_file_props_path)) {
-                    fmt::println("Using cached backend attributes for {}", real_backend_name);
-                    return CmdExecResult::done;
-                } else {
-                    spdlog::warn(
-                        "Cached backend attributes for {} not found. "
-                        "Fetching backend attributes from IBM Quantum Platform...",
-                        real_backend_name);
-                }
-            }
-
-            if (dvlab::utils::uv_run_script(
-                    script_path,
-                    {real_backend_name,
-                     "-o",
-                     tmp_dir.path().string()}) == 0) {
-                fmt::println("Successfully got backend attributes for {}", real_backend_name);
-
-                std::filesystem::create_directories(cached_dir);
-                std::filesystem::copy(tmp_dir.path() / device_file_path, cached_dir / device_file_path);
-                std::filesystem::copy(tmp_dir.path() / device_file_props_path, cached_dir / device_file_props_path);
-
-                fmt::println("Saved backend attributes for {} to {}", real_backend_name, cached_dir.string());
-                return CmdExecResult::done;
-            }
-
-            if (cached) {
-                spdlog::error("Failed to get backend attributes for {}!!", real_backend_name);
+            if (!result) {
+                spdlog::error("Failed to fetch IBM backend attributes for {}", backend_name);
                 return CmdExecResult::error;
             }
 
-            spdlog::warn("Failed to get backend attributes for {}. Trying to use cached backend attributes instead...", real_backend_name);
-
-            if (std::filesystem::exists(cached_dir / device_file_path) && std::filesystem::exists(cached_dir / device_file_props_path)) {
-                spdlog::warn("Using cached backend attributes for {}", real_backend_name);
-                return CmdExecResult::done;
+            if (result->source == IBMQDeviceJsonsSource::cached && !cached) {
+                spdlog::warn(
+                    "Failed to fetch real backend attributes for {}. "
+                    "Using cached backend attributes instead...",
+                    backend_name);
             }
 
-            spdlog::warn("No cached backend attributes for {} found. Trying to use fake backend instead...", real_backend_name);
-
-            if (dvlab::utils::uv_run_script(
-                    script_path,
-                    {fake_backend_name,
-                     "-f",
-                     "-o",
-                     tmp_dir.path().string()}) == 0) {
-                spdlog::warn("Using fake backend attributes for {}", fake_backend_name);
-                return CmdExecResult::done;
-            } else {
-                spdlog::error("Failed to get fake backend attributes for {}", fake_backend_name);
-                return CmdExecResult::error;
+            if (result->source == IBMQDeviceJsonsSource::fake && !fake) {
+                spdlog::warn(
+                    "Failed to fetch real backend attributes for {}. "
+                    "Using fake backend attributes instead...",
+                    backend_name);
             }
 
-            return CmdExecResult::error;
+            // TODO: parse and add the device to the device manager
+
+            return CmdExecResult::done;
         }};
 }
 
