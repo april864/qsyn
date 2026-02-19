@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <sul/dynamic_bitset.hpp>
@@ -249,6 +250,9 @@ public:
         return std::ranges::all_of(std::views::iota(0ul, n_qubits()), [this](size_t i) { return is_i(i); });
     }
 
+    /** @brief Direct access to the underlying bitset (e.g. for hashing or low-level use). */
+    sul::dynamic_bitset<> const& bitset() const { return _bitset; }
+
 private:
     sul::dynamic_bitset<> _bitset;
 
@@ -261,8 +265,26 @@ inline bool is_commutative(PauliProduct const& lhs, PauliProduct const& rhs) {
     return lhs.is_commutative(rhs);
 }
 
+uint8_t power_of_i(PauliProduct const& lhs, PauliProduct const& rhs);
+
 }  // namespace tableau
 }  // namespace qsyn
+
+namespace std {
+
+template <>
+struct hash<qsyn::tableau::PauliProduct> {
+    size_t operator()(qsyn::tableau::PauliProduct const& p) const noexcept {
+        auto const& b = p.bitset();
+        size_t h = std::hash<size_t>{}(b.size());
+        for (size_t i = 0; i < b.size(); ++i) {
+            h = (h * 31) + static_cast<size_t>(b[i]);
+        }
+        return h;
+    }
+};
+
+}  // namespace std
 
 template <>
 struct fmt::formatter<qsyn::tableau::Pauli> {

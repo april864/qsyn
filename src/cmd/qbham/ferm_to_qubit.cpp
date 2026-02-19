@@ -5,7 +5,8 @@
 */
 
 #include "./ferm_to_qubit.hpp"
-#include "hamiltonian/jordan_wigner.hpp"
+
+#include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 
 using namespace dvlab::argparse;
@@ -14,9 +15,10 @@ namespace qsyn::hamiltonian {
 
 dvlab::Command qbham_ferm_to_qubit_cmd(QubitHamiltonianMgr& qbham_mgr) {
     return dvlab::Command(
-        "jw", 
+        "jw",
         [](ArgumentParser& parser) {
-            parser.description("Transform fermionic Hamiltonian to qubit Hamiltonian "
+            parser.description(
+                "Transform fermionic Hamiltonian to qubit Hamiltonian "
                 "using Jordan-Wigner. Currently testing with a hard-coded fermionic Hamiltonian");
         },
         [&](ArgumentParser const& /*parser*/) {
@@ -34,17 +36,16 @@ dvlab::Command qbham_ferm_to_qubit_cmd(QubitHamiltonianMgr& qbham_mgr) {
             FermionHamiltonian f_ham(3);
             f_ham.add_term(1.0, {{0, true}, {2, false}});
             f_ham.add_term(1.0, {{2, true}, {0, false}});
-            
-            // JW transformation
-            QubitHamiltonian q_ham = jordan_wigner(f_ham);
 
-            size_t id = 0;
-            while (qbham_mgr.is_id(id)) id++;
+            // JW transformation
+            QubitHamiltonian q_ham = qubitize(f_ham, JordanWignerMapping{f_ham.n_modes()});
+
+            size_t id = qbham_mgr.get_next_id();
             qbham_mgr.add(id, std::make_unique<QubitHamiltonian>(std::move(q_ham)));
-            
+
             fmt::println("Transformed to QubitHamiltonian with ID: {}", id);
             return dvlab::CmdExecResult::done;
         });
 }
 
-} // namespace qsyn::hamiltonian
+}  // namespace qsyn::hamiltonian

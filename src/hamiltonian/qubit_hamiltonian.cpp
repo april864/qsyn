@@ -12,59 +12,18 @@ namespace qsyn {
 
 namespace hamiltonian {
 
-QubitHamiltonianTerm::QubitHamiltonianTerm(
-    std::initializer_list<Pauli> const& pauli_list, double coeff)
-    : _pauli_product(pauli_list, false), _coeff(coeff) {
-    _normalize();
+ComplexPauliTerm to_complex_pauli_term(HermitianPauliTerm const& term) {
+    return ComplexPauliTerm(term.pauli_product(), std::complex<double>(term.coeff(), 0.0));
 }
 
-QubitHamiltonianTerm::QubitHamiltonianTerm(
-    std::string_view pauli_str, double coeff)
-    : _pauli_product(pauli_str), _coeff(coeff) {
-    _normalize();
-}
-
-QubitHamiltonianTerm::QubitHamiltonianTerm(
-    PauliProduct const& pauli_product, double coeff)
-    : _pauli_product(pauli_product), _coeff(coeff) {
-    _normalize();
-}
-
-std::string QubitHamiltonianTerm::to_string(char signedness) const {
-    return fmt::format("{} * {}", _coeff, _pauli_product.to_string(signedness));
-}
-
-std::string QubitHamiltonianTerm::to_bit_string() const {
-    return fmt::format(
-        "{}  {}",
-        _pauli_product.to_bit_string().substr(0, 2 * n_qubits() + 1), _coeff);
-}
-
-QubitHamiltonianTerm&
-QubitHamiltonianTerm::h(size_t qubit) noexcept {
-    _pauli_product.h(qubit);
-    _normalize();
-    return *this;
-}
-
-QubitHamiltonianTerm&
-QubitHamiltonianTerm::s(size_t qubit) noexcept {
-    _pauli_product.s(qubit);
-    _normalize();
-    return *this;
-}
-
-QubitHamiltonianTerm&
-QubitHamiltonianTerm::cx(size_t control, size_t target) noexcept {
-    _pauli_product.cx(control, target);
-    _normalize();
-    return *this;
+HermitianPauliTerm to_hermitian_pauli_term(ComplexPauliTerm const& term) {
+    return HermitianPauliTerm(term.pauli_product(), term.coeff().real());
 }
 
 QubitHamiltonian::QubitHamiltonian(size_t n_qubits) : _n_qubits(n_qubits), _filename("") {}
 
 QubitHamiltonian::QubitHamiltonian(
-    std::initializer_list<QubitHamiltonianTerm> const& terms)
+    std::initializer_list<HermitianPauliTerm> const& terms)
     : _terms(terms),
       _n_qubits(_terms.begin()->n_qubits()),
       _filename("") {}
@@ -94,7 +53,7 @@ QubitHamiltonian::cx(size_t control, size_t target) noexcept {
 }
 
 QubitHamiltonian&
-QubitHamiltonian::add_term(QubitHamiltonianTerm const& term) {
+QubitHamiltonian::add_term(HermitianPauliTerm const& term) {
     if (term.n_qubits() != _n_qubits) {
         throw std::invalid_argument("term has different number of qubits");
     }
@@ -124,6 +83,18 @@ bool is_all_commutative(QubitHamiltonian const& hamilt) {
         }
     }
     return true;
+}
+
+ComplexPauliTerm& ComplexPauliTerm::operator*=(ComplexPauliTerm const& rhs) {
+    auto const power_of_i = qsyn::tableau::power_of_i(
+        this->pauli_product(), rhs.pauli_product());
+    if ((power_of_i % 2) == 1) {
+        this->coeff() *= std::complex<double>(0, 1);
+    }
+    this->pauli_product() *= rhs.pauli_product();
+    this->coeff() *= rhs.coeff();
+    this->_normalize();
+    return *this;
 }
 
 }  // namespace hamiltonian

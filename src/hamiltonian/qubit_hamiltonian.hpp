@@ -6,36 +6,51 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
+#include <complex>
+#include <string_view>
+
 #include "tableau/pauli_product_trait.hpp"
 
 namespace qsyn {
 
 namespace hamiltonian {
 
-class QubitHamiltonianTerm
-    : public qsyn::tableau::PauliProductTrait<QubitHamiltonianTerm> {
+template <typename CoeffT>
+class PauliTermInterface
+    : public qsyn::tableau::PauliProductTrait<PauliTermInterface<CoeffT>> {
 public:
     using Pauli        = qsyn::tableau::Pauli;
     using PauliProduct = qsyn::tableau::PauliProduct;
-    QubitHamiltonianTerm(
+    PauliTermInterface(
         std::initializer_list<Pauli> const& pauli_list,
-        double coeff);
+        CoeffT coeff)
+        : _pauli_product(pauli_list, false), _coeff(coeff) {
+        _normalize();
+    }
 
-    QubitHamiltonianTerm(std::string_view pauli_str, double coeff);
+    PauliTermInterface(std::string_view pauli_str, CoeffT coeff)
+        : _pauli_product(pauli_str), _coeff(coeff) {
+        _normalize();
+    }
 
-    QubitHamiltonianTerm(
-        PauliProduct const& pauli_product, double coeff);
+    PauliTermInterface(
+        PauliProduct const& pauli_product, CoeffT coeff)
+        : _pauli_product(pauli_product), _coeff(coeff) {
+        _normalize();
+    }
 
     template <std::input_iterator I, std::sentinel_for<I> S>
     requires std::same_as<std::iter_value_t<I>, Pauli>
-    QubitHamiltonianTerm(I first, S last, double coeff)
+    PauliTermInterface(I first, S last, CoeffT coeff)
         : _pauli_product(first, last, false), _coeff(coeff) {
         _normalize();
     }
 
     template <std::ranges::range R>
     requires std::same_as<std::ranges::range_value_t<R>, Pauli>
-    QubitHamiltonianTerm(R const& r, double coeff)
+    PauliTermInterface(R const& r, CoeffT coeff)
         : _pauli_product(std::ranges::begin(r), std::ranges::end(r), false),
           _coeff(coeff) {
         _normalize();
@@ -50,30 +65,49 @@ public:
     bool is_z(size_t i) const { return _pauli_product.is_z(i); }
 
     PauliProduct const& pauli_product() const { return _pauli_product; }
-    double coeff() const { return _coeff; }
-    double& coeff() { return _coeff; }
+    PauliProduct& pauli_product() { return _pauli_product; }
+    CoeffT coeff() const { return _coeff; }
+    CoeffT& coeff() { return _coeff; }
 
-    bool operator==(QubitHamiltonianTerm const& rhs) const {
+    bool operator==(PauliTermInterface const& rhs) const {
         return _pauli_product == rhs._pauli_product && _coeff == rhs._coeff;
     }
-    bool operator!=(QubitHamiltonianTerm const& rhs) const { return !(*this == rhs); }
+    bool operator!=(PauliTermInterface const& rhs) const { return !(*this == rhs); }
 
-    std::string to_string(char signedness = '-') const;
-    std::string to_bit_string() const;
+    std::string to_string(char signedness = '-') const {
+        return fmt::format("{} * {}", _coeff, _pauli_product.to_string(signedness));
+    }
+    std::string to_bit_string() const {
+        return fmt::format(
+            "{}  {}",
+            _pauli_product.to_bit_string().substr(0, 2 * n_qubits() + 1), _coeff);
+    }
 
-    QubitHamiltonianTerm& h(size_t qubit) noexcept override;
-    QubitHamiltonianTerm& s(size_t qubit) noexcept override;
-    QubitHamiltonianTerm& cx(size_t control, size_t target) noexcept override;
+    PauliTermInterface& h(size_t qubit) noexcept override {
+        _pauli_product.h(qubit);
+        _normalize();
+        return *this;
+    }
+    PauliTermInterface& s(size_t qubit) noexcept override {
+        _pauli_product.s(qubit);
+        _normalize();
+        return *this;
+    }
+    PauliTermInterface& cx(size_t control, size_t target) noexcept override {
+        _pauli_product.cx(control, target);
+        _normalize();
+        return *this;
+    }
 
-    bool is_commutative(QubitHamiltonianTerm const& rhs) const {
+    bool is_commutative(PauliTermInterface const& rhs) const {
         return _pauli_product.is_commutative(rhs._pauli_product);
     }
 
     bool is_diagonal() const { return _pauli_product.is_diagonal(); }
 
-private:
+protected:
     qsyn::tableau::PauliProduct _pauli_product;
-    double _coeff;
+    CoeffT _coeff;
 
     void _normalize() {
         if (_pauli_product.is_neg()) {
@@ -83,8 +117,37 @@ private:
     }
 };
 
+class HermitianPauliTerm : public PauliTermInterface<double> {
+public:
+    using PauliTermInterface::PauliTermInterface;
+};
+class ComplexPauliTerm : public PauliTermInterface<std::complex<double>> {
+public:
+    using PauliTermInterface::PauliTermInterface;
+    // NOTE: the multiplication is only closed for ComplexPauliTerm
+    // This is why we don't define it in the PauliTermInterface base class
+    ComplexPauliTerm& operator*=(ComplexPauliTerm const& rhs);
+    friend ComplexPauliTerm operator*(
+        ComplexPauliTerm lhs, ComplexPauliTerm const& rhs) {
+        lhs *= rhs;
+        return lhs;
+    }
+};
+
+ComplexPauliTerm to_complex_pauli_term(HermitianPauliTerm const& term);
+
+/**
+ * Convert a complex Pauli term to a Hermitian Pauli term.
+ * This function ignores the imaginary part of the complex coefficient.
+ *
+ * @param term The complex Pauli term to convert.
+ * @return The Hermitian Pauli term.
+ */
+HermitianPauliTerm to_hermitian_pauli_term(ComplexPauliTerm const& term);
+
+template <typename CoeffT>
 inline bool is_commutative(
-    QubitHamiltonianTerm const& lhs, QubitHamiltonianTerm const& rhs) {
+    PauliTermInterface<CoeffT> const& lhs, PauliTermInterface<CoeffT> const& rhs) {
     return lhs.is_commutative(rhs);
 }
 
@@ -92,7 +155,7 @@ class QubitHamiltonian
     : public qsyn::tableau::PauliProductTrait<QubitHamiltonian> {
 public:
     QubitHamiltonian(size_t n_qubits);
-    QubitHamiltonian(std::initializer_list<QubitHamiltonianTerm> const& terms);
+    QubitHamiltonian(std::initializer_list<HermitianPauliTerm> const& terms);
 
     size_t n_qubits() const { return _terms.begin()->n_qubits(); }
 
@@ -100,7 +163,7 @@ public:
     QubitHamiltonian& s(size_t qubit) noexcept override;
     QubitHamiltonian& cx(size_t control, size_t target) noexcept override;
 
-    QubitHamiltonian& add_term(QubitHamiltonianTerm const& term);
+    QubitHamiltonian& add_term(HermitianPauliTerm const& term);
     template <std::input_iterator I, std::sentinel_for<I> S>
     QubitHamiltonian& add_terms(I first, S last) {
         for (auto it = first; it != last; ++it) {
@@ -151,7 +214,7 @@ public:
     }
 
 private:
-    std::vector<QubitHamiltonianTerm> _terms;
+    std::vector<HermitianPauliTerm> _terms;
     size_t _n_qubits;
     std::string _filename;
     std::vector<std::string> _procedures;
@@ -167,3 +230,12 @@ bool is_all_commutative(QubitHamiltonian const& hamilt);
 
 }  // namespace hamiltonian
 }  // namespace qsyn
+
+template <>
+struct fmt::formatter<std::complex<double>> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    template <typename FormatContext>
+    auto format(std::complex<double> const& c, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "({}, {})", c.real(), c.imag());
+    }
+};

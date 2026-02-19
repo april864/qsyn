@@ -70,6 +70,16 @@ uint8_t power_of_i(Pauli a, Pauli b) {
     return 0;
 }
 
+uint8_t power_of_i(PauliProduct const& lhs, PauliProduct const& rhs) {
+    uint8_t power = 0;
+    // NOTE: it's safe to use std::min here because the extra bits don't
+    // affect the power of i
+    for (size_t i = 0; i < std::min(lhs.n_qubits(), rhs.n_qubits()); ++i) {
+        power += power_of_i(lhs.get_pauli_type(i), rhs.get_pauli_type(i));
+    }
+    return power % 4;
+}
+
 PauliProduct::PauliProduct(std::initializer_list<Pauli> const& pauli_list, bool is_neg)
     : _bitset(2 * pauli_list.size() + 1, 0) {
     if (is_neg) {
@@ -125,14 +135,22 @@ PauliProduct::PauliProduct(std::string_view pauli_str) {
 }
 
 PauliProduct& PauliProduct::operator*=(PauliProduct const& rhs) {
-    assert(n_qubits() == rhs.n_qubits());
+    // if lhs is shorter than rhs, resize lhs to the same length as rhs
     // calculate the sign
-    uint8_t power_of_i = 0;
-    for (size_t i = 0; i < n_qubits(); ++i) {
-        power_of_i += qsyn::tableau::power_of_i(get_pauli_type(i), rhs.get_pauli_type(i));
-    }
+    uint8_t const power_of_i = qsyn::tableau::power_of_i(*this, rhs);
     if ((power_of_i % 4) >> 1 == 1) {
         _bitset.flip(_r_idx());
+    }
+
+    if (this->n_qubits() < rhs.n_qubits()) {
+        // REVIEW: maybe we should store z and x separately in the first place?
+        auto new_bitset = sul::dynamic_bitset<>(2 * rhs.n_qubits() + 1);
+        for (size_t i = 0; i < this->n_qubits(); ++i) {
+            new_bitset.set(i, this->is_z_set(i));
+            new_bitset.set(i + rhs.n_qubits(), this->is_x_set(i));
+        }
+        new_bitset.set(rhs.n_qubits() * 2, this->is_neg());
+        this->_bitset = new_bitset;
     }
     _bitset ^= rhs._bitset;
     return *this;

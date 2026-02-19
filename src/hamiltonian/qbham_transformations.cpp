@@ -7,8 +7,8 @@
 #include "./qbham_transformations.hpp"
 
 #include <algorithm>
-#include <ranges>
 #include <cmath>
+#include <ranges>
 
 #include "./qubit_hamiltonian.hpp"
 
@@ -28,7 +28,7 @@ using PauliTermsSorter = std::function<void(QubitHamiltonian& hamilt)>;
 void lexicographic_sort(
     QubitHamiltonian& hamilt,
     std::span<qsyn::tableau::Pauli const, 4> order) {
-    using QbHamTerm = QubitHamiltonianTerm;
+    using QbHamTerm = HermitianPauliTerm;
     using Pauli     = qsyn::tableau::Pauli;
 
     constexpr std::array<Pauli, 4>
@@ -113,7 +113,7 @@ void lexicographic_sort(QubitHamiltonian& hamilt) {
  */
 void magnitude_sort(QubitHamiltonian& hamilt) {
     auto const compare_term_magnitudes =
-        [](QubitHamiltonianTerm const& a, QubitHamiltonianTerm const& b) {
+        [](HermitianPauliTerm const& a, HermitianPauliTerm const& b) {
             double a_magnitude = std::abs(a.coeff());
             double b_magnitude = std::abs(b.coeff());
             return a_magnitude > b_magnitude;
