@@ -37,7 +37,6 @@ struct DeviceInfo {
 std::ostream& operator<<(std::ostream& os, DeviceInfo const& info);
 
 class Device {
-    constexpr static size_t default_max_dist = 100000;
     struct AdjacencyPairHash {
         size_t operator()(std::pair<size_t, size_t> const& k) const {
             return (
@@ -58,19 +57,15 @@ public:
     DeviceInfo const& get_adjacency_pair_info(size_t a, size_t b);
     DeviceInfo const& get_qubit_info(size_t a);
     size_t get_num_adjacencies() const { return _adjacency_info.size(); }
-    size_t get_predecessor(size_t dest, size_t src) { return _predecessor[dest][src]; }
+    size_t get_num_qubits() const { return _num_qubit; }
     void set_num_qubits(size_t n) { _num_qubit = n; }
     void set_name(std::string n) { _name = std::move(n); }
     void add_gate_type(std::string const& gt) { _gate_set.emplace_back(gt); }
     void add_adjacency_info(size_t a, size_t b, DeviceInfo info);
     void add_qubit_info(size_t a, DeviceInfo info);
 
-    void clear_predecessor() { _predecessor.clear(); }
-    void clear_distance() { _distance.clear(); }
-    void resize_to_num_qubit();
-    void floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list);
-
     void print_single_edge(size_t a, size_t b) const;
+    AdjacencyMap const& get_adjacency_info() const { return _adjacency_info; }
 
 private:
     std::string _name;
@@ -78,14 +73,14 @@ private:
     std::vector<std::string> _gate_set;
     PhysicalQubitInfo _qubit_info;
     AdjacencyMap _adjacency_info;
-
-    // NOTE - Containers and helper functions for Floyd-Warshall
-    size_t _max_dist = default_max_dist;
-    std::vector<std::vector<QubitIdType>> _predecessor;  // _predecessor[i][j] = predecessor of j in path from i to j
-    std::vector<std::vector<size_t>> _distance;          // _distance[i][j] = distance from i to j
-    void _set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) const;
-    void _init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list);
 };
+
+struct APSPResult {
+    std::vector<std::vector<std::optional<QubitIdType>>> predecessor;
+    std::vector<std::vector<std::optional<size_t>>> distance;
+};
+
+APSPResult floyd_warshall(const Device& device);
 
 class PhysicalQubitState {
 public:
@@ -136,8 +131,7 @@ private:
 
 class DeviceState {
 public:
-    using PhysicalQubitList                  = std::vector<PhysicalQubitState>;
-    constexpr static size_t default_max_dist = 100000;
+    using PhysicalQubitList = std::vector<PhysicalQubitState>;
     DeviceState() : _topology{std::make_shared<Device>()} {}
 
     std::string get_name() const { return _topology->get_name(); }
@@ -177,6 +171,7 @@ private:
     size_t _num_qubit = 0;
     std::shared_ptr<Device> _topology;
     PhysicalQubitList _qubit_list;
+    std::shared_ptr<APSPResult> _apsp;
 
     // NOTE - Internal functions only used in reader
     bool _parse_gate_set(std::string const& gate_set_str);

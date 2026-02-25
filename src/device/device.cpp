@@ -107,83 +107,70 @@ void Device::add_qubit_info(size_t a, DeviceInfo info) {
 }
 
 /**
- * @brief Resize distance and predecessor lists
+ * @brief Floyd-Warshall Algorithm. Solve All Pairs Shortest Path (APSP)
  *
+ * @param qubit_list Physical qubit adjacency information
  */
-void Device::resize_to_num_qubit() {
-    _distance.resize(_num_qubit);
-    _predecessor.resize(_num_qubit);
+APSPResult floyd_warshall(const Device& device) {
+    auto const n = device.get_num_qubits();
 
-    for (size_t i = 0; i < _num_qubit; i++) {
-        _distance[i].resize(_num_qubit);
-        _predecessor[i].resize(_num_qubit, max_qubit_id);
-    }
-}
+    APSPResult result;
+    result.distance.assign(n, std::vector<std::optional<size_t>>(n, std::nullopt));
+    result.predecessor.assign(n, std::vector<std::optional<QubitIdType>>(n, std::nullopt));
 
-/**
- * @brief Initialize predecessor and distance lists
- *
- * @param adjacency_matrix
- * @param qubit_list
- */
-void Device::_init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) {
-    resize_to_num_qubit();
-    for (size_t i = 0; i < _num_qubit; i++) {
-        for (size_t j = 0; j < _num_qubit; j++) {
-            _distance[i][j] = adjacency_matrix[i][j];
-            if (_distance[i][j] != 0 && _distance[i][j] != _max_dist) {
-                _predecessor[i][j] = qubit_list[i].get_id();
+    // Start with no paths except zero distance to self
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
+            if (i == j) {
+                result.distance[i][j]    = 0;
+                result.predecessor[i][j] = std::nullopt;
             }
         }
     }
-}
 
-/**
- * @brief Set weight of edge used in Floyd-Warshall
- *
- * @param adjacency_matrix
- * @param qubit_list
- */
-void Device::_set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) const {
-    assert(adjacency_matrix.size() == _num_qubit);
-    for (size_t i = 0; i < _num_qubit; i++) {
-        for (auto const& adj : qubit_list[i].get_adjacencies()) {
-            adjacency_matrix[i][adj] = 1;
-        }
+    // Set weights of direct edges from adjacency information
+    for (auto const& [adj, _] : device.get_adjacency_info()) {
+        auto const& [i, j]       = adj;
+        result.distance[i][j]    = 1;
+        result.distance[j][i]    = 1;
+        result.predecessor[i][j] = i;
+        result.predecessor[j][i] = j;
     }
-}
 
-/**
- * @brief Floyd-Warshall Algorithm. Solve All Pairs Shortest Path (APSP)
- *
- * @param adjacency_matrix
- * @param qubit_list
- */
-void Device::floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) {
-    _set_weight(adjacency_matrix, qubit_list);
-    _init_predecessor_and_distance(adjacency_matrix, qubit_list);
-    for (size_t k = 0; k < _num_qubit; k++) {
+    for (size_t k = 0; k < n; k++) {
         spdlog::debug("Including vertex({}):", k);
-        for (size_t i = 0; i < _num_qubit; i++) {
-            for (size_t j = 0; j < _num_qubit; j++) {
-                if ((_distance[i][j] > _distance[i][k] + _distance[k][j]) && (_distance[i][k] != _max_dist)) {
-                    _distance[i][j]    = _distance[i][k] + _distance[k][j];
-                    _predecessor[i][j] = _predecessor[k][j];
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < n; j++) {
+                if (!result.distance[i][k].has_value() || !result.distance[k][j].has_value()) {
+                    continue;
+                }
+                auto const through_k = result.distance[i][k].value() + result.distance[k][j].value();
+                if (!result.distance[i][j].has_value() || result.distance[i][j].value() > through_k) {
+                    result.distance[i][j]    = through_k;
+                    result.predecessor[i][j] = result.predecessor[k][j];
                 }
             }
         }
 
         spdlog::debug("Predecessor Matrix:");
-        for (auto& row : _predecessor) {
+        for (auto& row : result.predecessor) {
             spdlog::debug("{:5}", fmt::join(
-                                      row | std::views::transform([](auto j) { return (j == max_qubit_id) ? std::string{"/"} : std::to_string(j); }), ""));
+                                      row | std::views::transform([](std::optional<QubitIdType> const& j) {
+                                          return j.has_value() ? std::to_string(j.value()) : std::string{"/"};
+                                      }),
+                                      ""));
         }
         spdlog::debug("Distance Matrix:");
-        for (auto& row : _distance) {
+        for (auto& row : result.distance) {
             spdlog::debug("{:5}", fmt::join(
-                                      row | std::views::transform([this](size_t j) { return (j == _max_dist) ? std::string{"X"} : std::to_string(j); }), ""));
+                                      row | std::views::transform([](std::optional<size_t> const& d) {
+                                          return d.has_value() ? std::to_string(d.value()) : std::string{"X"};
+                                      }),
+                                      ""));
         }
     }
+
+    return result;
 }
 
 /**
@@ -258,7 +245,11 @@ void PhysicalQubitState::reset() {
  * @return tuple<size_t, size_t> (index of next qubit, cost)
  */
 std::tuple<QubitIdType, QubitIdType> DeviceState::get_next_swap_cost(QubitIdType source, QubitIdType target) {
-    auto const next_idx  = _topology->get_predecessor(target, source);
+    DVLAB_ASSERT(static_cast<bool>(_apsp), "APSPResult not initialized; call calculate_path() first.");
+    auto const& predecessor = _apsp->predecessor;
+    auto const next_idx_opt = predecessor[target][source];
+    DVLAB_ASSERT(next_idx_opt.has_value(), fmt::format("No path between {} and {} in get_next_swap_cost()", source, target));
+    auto const next_idx  = next_idx_opt.value();
     auto const& q_source = get_physical_qubit(source);
     auto const& q_next   = get_physical_qubit(next_idx);
     auto const cost      = std::max(q_source.get_occupied_time(), q_next.get_occupied_time());
@@ -351,20 +342,9 @@ void DeviceState::place(std::vector<QubitIdType> const& assignment) {
  *
  */
 void DeviceState::calculate_path() {
-    _topology->clear_predecessor();
-    _topology->clear_distance();
-
-    std::vector<std::vector<QubitIdType>> adjacency_matrix;
-    adjacency_matrix.resize(get_num_qubits());
-
-    for (size_t i = 0; i < get_num_qubits(); i++) {
-        adjacency_matrix[i].resize(get_num_qubits(), default_max_dist);
-        for (size_t j = 0; j < get_num_qubits(); j++) {
-            if (i == j)
-                adjacency_matrix[i][j] = 0;
-        }
+    if (!_apsp) {
+        _apsp = std::make_shared<APSPResult>(floyd_warshall(*_topology));
     }
-    _topology->floyd_warshall(adjacency_matrix, _qubit_list);
 }
 
 /**
@@ -378,11 +358,20 @@ std::vector<PhysicalQubitState> DeviceState::get_path(QubitIdType src, QubitIdTy
     std::vector<PhysicalQubitState> path;
     path.emplace_back(_qubit_list.at(src));
     if (src == dest) return path;
-    auto new_pred = _topology->get_predecessor(dest, src);
-    path.emplace_back(new_pred);
+    if (!_apsp) {
+        return path;
+    }
+    auto const& predecessor = _apsp->predecessor;
+    auto pred_opt           = predecessor[dest][src];
+    if (!pred_opt.has_value()) {
+        return path;
+    }
+    auto new_pred = pred_opt.value();
+    path.emplace_back(_qubit_list.at(new_pred));
     while (true) {
-        new_pred = _topology->get_predecessor(dest, new_pred);
-        if (new_pred == max_qubit_id) break;
+        pred_opt = predecessor[dest][new_pred];
+        if (!pred_opt.has_value()) break;
+        new_pred = pred_opt.value();
         path.emplace_back(_qubit_list.at(new_pred));
     }
     return path;
