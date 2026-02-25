@@ -16,12 +16,12 @@
 
 namespace qsyn::device {
 
-using DeviceMgr = dvlab::utils::DataStructureManager<Device>;
+using DeviceMgr = dvlab::utils::DataStructureManager<DeviceState>;
 
 }  // namespace qsyn::device
 
 template <>
-inline std::string dvlab::utils::data_structure_info_string(dvlab::utils::DataStructureManager<qsyn::device::Device> const& mgr, size_t id) {
+inline std::string dvlab::utils::data_structure_info_string(dvlab::utils::DataStructureManager<qsyn::device::DeviceState> const& mgr, size_t id) {
     auto* device = mgr.find_by_id(id);
     if (!device) return {};
     return fmt::format("{:<19} #Q: {:>4}",
@@ -30,7 +30,7 @@ inline std::string dvlab::utils::data_structure_info_string(dvlab::utils::DataSt
 }
 
 template <>
-inline std::string dvlab::utils::data_structure_name(dvlab::utils::DataStructureManager<qsyn::device::Device> const& mgr, size_t id) {
+inline std::string dvlab::utils::data_structure_name(dvlab::utils::DataStructureManager<qsyn::device::DeviceState> const& mgr, size_t id) {
     auto* device = mgr.find_by_id(id);
     if (!device) return {};
     return device->get_name();

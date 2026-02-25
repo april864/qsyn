@@ -24,9 +24,9 @@ class QCirGate;
 
 namespace qsyn::device {
 
+class DeviceState;
 class Device;
-class Topology;
-class PhysicalQubit;
+class PhysicalQubitState;
 struct DeviceInfo;
 
 struct DeviceInfo {
@@ -36,7 +36,7 @@ struct DeviceInfo {
 
 std::ostream& operator<<(std::ostream& os, DeviceInfo const& info);
 
-class Topology {
+class Device {
     constexpr static size_t default_max_dist = 100000;
     struct AdjacencyPairHash {
         size_t operator()(std::pair<size_t, size_t> const& k) const {
@@ -51,7 +51,7 @@ public:
     using AdjacencyPair     = std::pair<size_t, size_t>;
     using PhysicalQubitInfo = std::unordered_map<size_t, DeviceInfo>;
     using AdjacencyMap      = std::unordered_map<AdjacencyPair, DeviceInfo, AdjacencyPairHash>;
-    Topology() {}
+    Device() {}
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
@@ -68,7 +68,7 @@ public:
     void clear_predecessor() { _predecessor.clear(); }
     void clear_distance() { _distance.clear(); }
     void resize_to_num_qubit();
-    void floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list);
+    void floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list);
 
     void print_single_edge(size_t a, size_t b) const;
 
@@ -83,15 +83,15 @@ private:
     size_t _max_dist = default_max_dist;
     std::vector<std::vector<QubitIdType>> _predecessor;  // _predecessor[i][j] = predecessor of j in path from i to j
     std::vector<std::vector<size_t>> _distance;          // _distance[i][j] = distance from i to j
-    void _set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list) const;
-    void _init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list);
+    void _set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) const;
+    void _init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list);
 };
 
-class PhysicalQubit {
+class PhysicalQubitState {
 public:
     using Adjacencies = std::vector<QubitIdType>;
-    PhysicalQubit() {}
-    PhysicalQubit(QubitIdType id) : _id(id) {}
+    PhysicalQubitState() {}
+    PhysicalQubitState(QubitIdType id) : _id(id) {}
 
     void set_id(QubitIdType id) { _id = id; }
     void set_occupied_time(size_t t) { _occupied_time = t; }
@@ -100,7 +100,7 @@ public:
 
     auto get_id() const { return _id; }
     auto get_occupied_time() const { return _occupied_time; }
-    auto is_adjacency(PhysicalQubit const& pq) const { return dvlab::contains(_adjacencies, pq.get_id()); }
+    auto is_adjacency(PhysicalQubitState const& pq) const { return dvlab::contains(_adjacencies, pq.get_id()); }
     auto const& get_adjacencies() const { return _adjacencies; }
     auto get_logical_qubit() const { return _logical_qubit; }
 
@@ -134,21 +134,21 @@ private:
     bool _taken       = false;
 };
 
-class Device {
+class DeviceState {
 public:
-    using PhysicalQubitList                  = std::vector<PhysicalQubit>;
+    using PhysicalQubitList                  = std::vector<PhysicalQubitState>;
     constexpr static size_t default_max_dist = 100000;
-    Device() : _topology{std::make_shared<Topology>()} {}
+    DeviceState() : _topology{std::make_shared<Device>()} {}
 
     std::string get_name() const { return _topology->get_name(); }
     size_t get_num_qubits() const { return _num_qubit; }
     PhysicalQubitList const& get_physical_qubit_list() const { return _qubit_list; }
-    PhysicalQubit& get_physical_qubit(QubitIdType id) { return _qubit_list[id]; }
+    PhysicalQubitState& get_physical_qubit(QubitIdType id) { return _qubit_list[id]; }
     QubitIdType get_physical_by_logical(QubitIdType id);
     std::tuple<QubitIdType, QubitIdType> get_next_swap_cost(QubitIdType source, QubitIdType target);
     bool qubit_id_exists(QubitIdType id) { return id < _qubit_list.size(); }
 
-    void add_physical_qubit(PhysicalQubit q) { _qubit_list[q.get_id()] = std::move(q); }
+    void add_physical_qubit(PhysicalQubitState q) { _qubit_list[q.get_id()] = std::move(q); }
     void add_adjacency(QubitIdType a, QubitIdType b);
 
     // NOTE - Duostra
@@ -158,7 +158,7 @@ public:
 
     // NOTE - All Pairs Shortest Path
     void calculate_path();
-    std::vector<PhysicalQubit> get_path(QubitIdType src, QubitIdType dest) const;
+    std::vector<PhysicalQubitState> get_path(QubitIdType src, QubitIdType dest) const;
 
     bool read_device(std::string const& filename);
 
@@ -175,7 +175,7 @@ public:
 
 private:
     size_t _num_qubit = 0;
-    std::shared_ptr<Topology> _topology;
+    std::shared_ptr<Device> _topology;
     PhysicalQubitList _qubit_list;
 
     // NOTE - Internal functions only used in reader

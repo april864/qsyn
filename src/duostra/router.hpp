@@ -43,8 +43,8 @@ public:
 
 class Router {
 public:
-    using Device        = qsyn::device::Device;
-    using PhysicalQubit = qsyn::device::PhysicalQubit;
+    using Device        = qsyn::device::DeviceState;
+    using PhysicalQubit = qsyn::device::PhysicalQubitState;
 
     enum CostStrategyType : std::uint8_t {
         start,

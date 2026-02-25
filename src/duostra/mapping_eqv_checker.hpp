@@ -29,7 +29,7 @@ namespace duostra {
 
 class MappingEquivalenceChecker {
 public:
-    using Device = qsyn::device::Device;
+    using Device = qsyn::device::DeviceState;
     MappingEquivalenceChecker(qcir::QCir* phy, qcir::QCir* log, Device dev, PlacerType placer_type, std::vector<QubitIdType> init = {}, bool reverse = false);
 
     bool check();

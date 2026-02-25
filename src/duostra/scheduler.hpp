@@ -22,7 +22,7 @@ namespace qsyn::duostra {
 
 class BaseScheduler {
 public:
-    using Device = qsyn::device::Device;
+    using Device = qsyn::device::DeviceState;
     BaseScheduler(CircuitTopology topo, bool tqdm)
         : _circuit_topology(std::move(topo)), _tqdm(tqdm) {}
     virtual ~BaseScheduler() = default;

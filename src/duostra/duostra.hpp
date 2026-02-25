@@ -26,7 +26,7 @@ namespace duostra {
 
 class Duostra {
 public:
-    using Device = qsyn::device::Device;
+    using Device = qsyn::device::DeviceState;
     struct DuostraExecutionOptions {
         bool verify_result = false;
         bool silent        = false;

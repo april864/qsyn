@@ -30,11 +30,11 @@
 using namespace qsyn::qcir;
 
 template <>
-struct fmt::formatter<qsyn::device::PhysicalQubit> {
+struct fmt::formatter<qsyn::device::PhysicalQubitState> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(qsyn::device::PhysicalQubit const& q, FormatContext& ctx) {
+    auto format(qsyn::device::PhysicalQubitState const& q, FormatContext& ctx) {
         return fmt::format_to(ctx.out(), "Q{:>2}, logical: {:>2}, lock until {}", q.get_id(), q.get_logical_qubit(), q.get_occupied_time());
     }
 };
@@ -48,7 +48,7 @@ namespace qsyn::device {
  * @param inst
  * @return size_t
  */
-size_t Device::get_delay(qcir::QCirGate const& inst) const {
+size_t DeviceState::get_delay(qcir::QCirGate const& inst) const {
     if (inst.get_operation().get_type() == "swap") {
         return 6;
     } else if (inst.get_qubits().size() == 1) {
@@ -69,7 +69,7 @@ size_t Device::get_delay(qcir::QCirGate const& inst) const {
  * @param b Id of second qubit
  * @return Info&
  */
-DeviceInfo const& Topology::get_adjacency_pair_info(size_t a, size_t b) {
+DeviceInfo const& Device::get_adjacency_pair_info(size_t a, size_t b) {
     if (a > b) std::swap(a, b);
     return _adjacency_info[std::make_pair(a, b)];
 }
@@ -80,7 +80,7 @@ DeviceInfo const& Topology::get_adjacency_pair_info(size_t a, size_t b) {
  * @param a
  * @return const Info&
  */
-DeviceInfo const& Topology::get_qubit_info(size_t a) {
+DeviceInfo const& Device::get_qubit_info(size_t a) {
     return _qubit_info[a];
 }
 
@@ -91,7 +91,7 @@ DeviceInfo const& Topology::get_qubit_info(size_t a) {
  * @param b Id of second qubit
  * @param info Information of this pair
  */
-void Topology::add_adjacency_info(size_t a, size_t b, DeviceInfo info) {
+void Device::add_adjacency_info(size_t a, size_t b, DeviceInfo info) {
     if (a > b) std::swap(a, b);
     _adjacency_info[std::make_pair(a, b)] = info;
 }
@@ -102,7 +102,7 @@ void Topology::add_adjacency_info(size_t a, size_t b, DeviceInfo info) {
  * @param a
  * @param info
  */
-void Topology::add_qubit_info(size_t a, DeviceInfo info) {
+void Device::add_qubit_info(size_t a, DeviceInfo info) {
     _qubit_info[a] = info;
 }
 
@@ -110,7 +110,7 @@ void Topology::add_qubit_info(size_t a, DeviceInfo info) {
  * @brief Resize distance and predecessor lists
  *
  */
-void Topology::resize_to_num_qubit() {
+void Device::resize_to_num_qubit() {
     _distance.resize(_num_qubit);
     _predecessor.resize(_num_qubit);
 
@@ -126,7 +126,7 @@ void Topology::resize_to_num_qubit() {
  * @param adjacency_matrix
  * @param qubit_list
  */
-void Topology::_init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list) {
+void Device::_init_predecessor_and_distance(const std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) {
     resize_to_num_qubit();
     for (size_t i = 0; i < _num_qubit; i++) {
         for (size_t j = 0; j < _num_qubit; j++) {
@@ -144,7 +144,7 @@ void Topology::_init_predecessor_and_distance(const std::vector<std::vector<Qubi
  * @param adjacency_matrix
  * @param qubit_list
  */
-void Topology::_set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list) const {
+void Device::_set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) const {
     assert(adjacency_matrix.size() == _num_qubit);
     for (size_t i = 0; i < _num_qubit; i++) {
         for (auto const& adj : qubit_list[i].get_adjacencies()) {
@@ -159,7 +159,7 @@ void Topology::_set_weight(std::vector<std::vector<QubitIdType>>& adjacency_matr
  * @param adjacency_matrix
  * @param qubit_list
  */
-void Topology::floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubit>& qubit_list) {
+void Device::floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_matrix, const std::vector<PhysicalQubitState>& qubit_list) {
     _set_weight(adjacency_matrix, qubit_list);
     _init_predecessor_and_distance(adjacency_matrix, qubit_list);
     for (size_t k = 0; k < _num_qubit; k++) {
@@ -192,7 +192,7 @@ void Topology::floyd_warshall(std::vector<std::vector<QubitIdType>>& adjacency_m
  * @param a Index of first qubit
  * @param b Index of second qubit
  */
-void Topology::print_single_edge(size_t a, size_t b) const {
+void Device::print_single_edge(size_t a, size_t b) const {
     auto query = (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     if (_adjacency_info.contains(query)) {
         fmt::println("({:>3}, {:>3})    Delay: {:>8.3f}    Error: {:>8.5f}", a, b, _adjacency_info.at(query)._time, _adjacency_info.at(query)._error);
@@ -210,7 +210,7 @@ void Topology::print_single_edge(size_t a, size_t b) const {
  * @param q
  * @return ostream&
  */
-std::ostream& operator<<(std::ostream& os, PhysicalQubit const& q) {
+std::ostream& operator<<(std::ostream& os, PhysicalQubitState const& q) {
     return os << fmt::format("{}", q);
 }
 
@@ -220,7 +220,7 @@ std::ostream& operator<<(std::ostream& os, PhysicalQubit const& q) {
  * @param source false: from 0, true: from 1
  * @param pred predecessor
  */
-void PhysicalQubit::mark(bool source, QubitIdType pred) {
+void PhysicalQubitState::mark(bool source, QubitIdType pred) {
     _marked = true;
     _source = source;
     _pred   = pred;
@@ -232,7 +232,7 @@ void PhysicalQubit::mark(bool source, QubitIdType pred) {
  * @param cost
  * @param swapTime
  */
-void PhysicalQubit::take_route(size_t cost, size_t swap_time) {
+void PhysicalQubitState::take_route(size_t cost, size_t swap_time) {
     _cost      = cost;
     _swap_time = swap_time;
     _taken     = true;
@@ -242,7 +242,7 @@ void PhysicalQubit::take_route(size_t cost, size_t swap_time) {
  * @brief Reset qubit
  *
  */
-void PhysicalQubit::reset() {
+void PhysicalQubitState::reset() {
     _marked = false;
     _taken  = false;
     _cost   = _occupied_time;
@@ -257,7 +257,7 @@ void PhysicalQubit::reset() {
  * @param target
  * @return tuple<size_t, size_t> (index of next qubit, cost)
  */
-std::tuple<QubitIdType, QubitIdType> Device::get_next_swap_cost(QubitIdType source, QubitIdType target) {
+std::tuple<QubitIdType, QubitIdType> DeviceState::get_next_swap_cost(QubitIdType source, QubitIdType target) {
     auto const next_idx  = _topology->get_predecessor(target, source);
     auto const& q_source = get_physical_qubit(source);
     auto const& q_next   = get_physical_qubit(next_idx);
@@ -273,7 +273,7 @@ std::tuple<QubitIdType, QubitIdType> Device::get_next_swap_cost(QubitIdType sour
  * @param id logical
  * @return size_t
  */
-QubitIdType Device::get_physical_by_logical(QubitIdType id) {
+QubitIdType DeviceState::get_physical_by_logical(QubitIdType id) {
     for (auto& phy : _qubit_list) {
         if (phy.get_logical_qubit() == id) {
             return phy.get_id();
@@ -288,7 +288,7 @@ QubitIdType Device::get_physical_by_logical(QubitIdType id) {
  * @param a Id of first qubit
  * @param b Id of second qubit
  */
-void Device::add_adjacency(QubitIdType a, QubitIdType b) {
+void DeviceState::add_adjacency(QubitIdType a, QubitIdType b) {
     if (a > b) std::swap(a, b);
     _qubit_list[a].add_adjacency(_qubit_list[b].get_id());
     _qubit_list[b].add_adjacency(_qubit_list[a].get_id());
@@ -301,7 +301,7 @@ void Device::add_adjacency(QubitIdType a, QubitIdType b) {
  *
  * @param op
  */
-void Device::apply_gate(qcir::QCirGate const& op, size_t time_begin) {
+void DeviceState::apply_gate(qcir::QCirGate const& op, size_t time_begin) {
     auto qubits = op.get_qubits();
     auto& q0    = get_physical_qubit(qubits[0]);
     auto& q1    = get_physical_qubit(qubits[1]);
@@ -325,7 +325,7 @@ void Device::apply_gate(qcir::QCirGate const& op, size_t time_begin) {
  *
  * @return vector<size_t> (index of physical qubit)
  */
-std::vector<std::optional<size_t>> Device::mapping() const {
+std::vector<std::optional<size_t>> DeviceState::mapping() const {
     std::vector<std::optional<size_t>> ret;
     ret.resize(_qubit_list.size());
     for (auto const& [id, qubit] : tl::views::enumerate(_qubit_list)) {
@@ -339,7 +339,7 @@ std::vector<std::optional<size_t>> Device::mapping() const {
  *
  * @param assign
  */
-void Device::place(std::vector<QubitIdType> const& assignment) {
+void DeviceState::place(std::vector<QubitIdType> const& assignment) {
     for (size_t i = 0; i < assignment.size(); ++i) {
         assert(_qubit_list[assignment[i]].get_logical_qubit() == std::nullopt);
         _qubit_list[assignment[i]].set_logical_qubit(i);
@@ -350,7 +350,7 @@ void Device::place(std::vector<QubitIdType> const& assignment) {
  * @brief Calculate Shortest Path
  *
  */
-void Device::calculate_path() {
+void DeviceState::calculate_path() {
     _topology->clear_predecessor();
     _topology->clear_distance();
 
@@ -374,8 +374,8 @@ void Device::calculate_path() {
  * @param t terminate
  * @return vector<PhyQubit>&
  */
-std::vector<PhysicalQubit> Device::get_path(QubitIdType src, QubitIdType dest) const {
-    std::vector<PhysicalQubit> path;
+std::vector<PhysicalQubitState> DeviceState::get_path(QubitIdType src, QubitIdType dest) const {
+    std::vector<PhysicalQubitState> path;
     path.emplace_back(_qubit_list.at(src));
     if (src == dest) return path;
     auto new_pred = _topology->get_predecessor(dest, src);
@@ -395,7 +395,7 @@ std::vector<PhysicalQubit> Device::get_path(QubitIdType src, QubitIdType dest) c
  * @return true
  * @return false
  */
-bool Device::read_device(std::string const& filename) {
+bool DeviceState::read_device(std::string const& filename) {
     std::ifstream topo_file(filename);
     if (!topo_file.is_open()) {
         spdlog::error("Cannot open the file \"{}\"!!", filename);
@@ -461,7 +461,7 @@ bool Device::read_device(std::string const& filename) {
     _qubit_list.reserve(adj_list.size());
 
     for (size_t i = 0; i < adj_list.size(); ++i) {
-        _qubit_list.emplace_back(PhysicalQubit(i));
+        _qubit_list.emplace_back(PhysicalQubitState(i));
     }
 
     for (size_t i = 0; i < adj_list.size(); i++) {
@@ -489,7 +489,7 @@ bool Device::read_device(std::string const& filename) {
  * @return true
  * @return false
  */
-bool Device::_parse_gate_set(std::string const& gate_set_str) {
+bool DeviceState::_parse_gate_set(std::string const& gate_set_str) {
     std::string _;
     auto const token_end = dvlab::str::str_get_token(gate_set_str, _, 0, ": ");
     auto data            = gate_set_str.substr(token_end + 1);
@@ -524,7 +524,7 @@ bool Device::_parse_gate_set(std::string const& gate_set_str) {
  * @return true
  * @return false
  */
-bool Device::_parse_info(std::ifstream& f, std::vector<std::vector<float>>& cx_error, std::vector<std::vector<float>>& cx_delay, std::vector<float>& single_error, std::vector<float>& single_delay) {
+bool DeviceState::_parse_info(std::ifstream& f, std::vector<std::vector<float>>& cx_error, std::vector<std::vector<float>>& cx_delay, std::vector<float>& single_error, std::vector<float>& single_delay) {
     std::string str = "", token = "";
     while (true) {
         while (str.empty()) {
@@ -562,7 +562,7 @@ bool Device::_parse_info(std::ifstream& f, std::vector<std::vector<float>>& cx_e
  * @return true
  * @return false
  */
-bool Device::_parse_singles(std::string const& data, std::vector<float>& container) {
+bool DeviceState::_parse_singles(std::string const& data, std::vector<float>& container) {
     std::string const buffer = dvlab::str::remove_brackets(data, '[', ']');
 
     for (auto const& token : dvlab::str::views::tokenize(buffer, ',')) {
@@ -584,7 +584,7 @@ bool Device::_parse_singles(std::string const& data, std::vector<float>& contain
  * @return true
  * @return false
  */
-bool Device::_parse_float_pairs(std::string const& data, std::vector<std::vector<float>>& containers) {
+bool DeviceState::_parse_float_pairs(std::string const& data, std::vector<std::vector<float>>& containers) {
     for (auto const& outer_token : dvlab::str::views::tokenize(data, '[')) {
         std::string const buffer{outer_token.substr(0, outer_token.find_first_of(']'))};
         auto floats =
@@ -615,7 +615,7 @@ bool Device::_parse_float_pairs(std::string const& data, std::vector<std::vector
  * @return true
  * @return false
  */
-bool Device::_parse_size_t_pairs(std::string const& data, std::vector<std::vector<size_t>>& containers) {
+bool DeviceState::_parse_size_t_pairs(std::string const& data, std::vector<std::vector<size_t>>& containers) {
     for (auto const& outer_token : dvlab::str::views::tokenize(data, '[')) {
         std::string const buffer{outer_token.substr(0, outer_token.find_first_of(']'))};
         auto qubit_ids =
@@ -644,7 +644,7 @@ bool Device::_parse_size_t_pairs(std::string const& data, std::vector<std::vecto
  *
  * @param cand a vector of qubits to be printed
  */
-void Device::print_qubits(std::vector<size_t> candidates) const {
+void DeviceState::print_qubits(std::vector<size_t> candidates) const {
     for (auto& c : candidates) {
         if (c >= _num_qubit) {
             spdlog::error("Error: the maximum qubit id is {}!!", _num_qubit - 1);
@@ -652,7 +652,7 @@ void Device::print_qubits(std::vector<size_t> candidates) const {
         }
     }
     fmt::println("");
-    std::vector<PhysicalQubit> qubits;
+    std::vector<PhysicalQubitState> qubits;
     qubits.resize(_num_qubit);
     for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
         qubits[idx] = info;
@@ -675,7 +675,7 @@ void Device::print_qubits(std::vector<size_t> candidates) const {
  *
  * @param cand Empty: print all. Single element [a]: print edges connecting to a. Two elements [a,b]: print edge (a,b).
  */
-void Device::print_edges(std::vector<size_t> candidates) const {
+void DeviceState::print_edges(std::vector<size_t> candidates) const {
     for (auto& c : candidates) {
         if (c >= _num_qubit) {
             spdlog::error("the maximum qubit id is {}!!", _num_qubit - 1);
@@ -683,7 +683,7 @@ void Device::print_edges(std::vector<size_t> candidates) const {
         }
     }
     fmt::println("");
-    std::vector<PhysicalQubit> qubits;
+    std::vector<PhysicalQubitState> qubits;
     qubits.resize(_num_qubit);
     for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
         qubits[idx] = info;
@@ -714,7 +714,7 @@ void Device::print_edges(std::vector<size_t> candidates) const {
  * @brief Print information of Topology
  *
  */
-void Device::print_topology() const {
+void DeviceState::print_topology() const {
     fmt::println("Topology: {} ({} qubits, {} edges)", get_name(), _qubit_list.size(), _topology->get_num_adjacencies());
     auto const tmp = _topology->get_gate_set();  // circumvents g++ 11.4 compiler bug
     fmt::println("Gate Set: {}", fmt::join(tmp | std::views::transform([](std::string const& gtype) { return dvlab::str::toupper_string(gtype); }), ", "));
@@ -726,7 +726,7 @@ void Device::print_topology() const {
  * @param s start
  * @param t terminate
  */
-void Device::print_path(QubitIdType src, QubitIdType dest) const {
+void DeviceState::print_path(QubitIdType src, QubitIdType dest) const {
     fmt::println("");
     for (auto& c : {src, dest}) {
         if (std::cmp_greater_equal(c, _num_qubit)) {
@@ -734,7 +734,7 @@ void Device::print_path(QubitIdType src, QubitIdType dest) const {
             return;
         }
     }
-    std::vector<PhysicalQubit> const& path = get_path(src, dest);
+    std::vector<PhysicalQubitState> const& path = get_path(src, dest);
     if (path.front().get_id() != src && path.back().get_id() != dest)
         fmt::println("No path between {} and {}", src, dest);
     else {
@@ -752,7 +752,7 @@ void Device::print_path(QubitIdType src, QubitIdType dest) const {
  * @brief Print Mapping (Physical : Logical)
  *
  */
-void Device::print_mapping() {
+void DeviceState::print_mapping() {
     fmt::println("----------Mapping---------");
     for (size_t i = 0; i < _num_qubit; i++) {
         fmt::println("{:<5} : {}", i, _qubit_list[i].get_logical_qubit());
@@ -763,9 +763,9 @@ void Device::print_mapping() {
  * @brief Print device status
  *
  */
-void Device::print_status() const {
+void DeviceState::print_status() const {
     fmt::println("Device Status:");
-    std::vector<PhysicalQubit> qubits;
+    std::vector<PhysicalQubitState> qubits;
     qubits.resize(_num_qubit);
     for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
         qubits[idx] = info;

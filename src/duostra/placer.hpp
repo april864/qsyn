@@ -16,14 +16,14 @@
 #include "qsyn/qsyn_type.hpp"
 
 namespace qsyn::device {
-class Device;
+class DeviceState;
 }
 
 namespace qsyn::duostra {
 
 class BasePlacer {
 public:
-    using Device = qsyn::device::Device;
+    using Device = qsyn::device::DeviceState;
     BasePlacer() {}
     virtual ~BasePlacer() = default;
 

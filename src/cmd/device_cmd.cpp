@@ -88,7 +88,7 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
                     .help("if specified, replace the current device; otherwise store to a new one");
             },
             [&device_mgr](ArgumentParser const& parser) {
-                qsyn::device::Device buffer_device;
+                qsyn::device::DeviceState buffer_device;
                 auto filepath = parser.get<std::string>("filepath");
                 auto replace  = parser.get<bool>("--replace");
 
@@ -98,9 +98,9 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 }
 
                 if (device_mgr.empty() || !replace) {
-                    device_mgr.add(device_mgr.get_next_id(), std::make_unique<qsyn::device::Device>(std::move(buffer_device)));
+                    device_mgr.add(device_mgr.get_next_id(), std::make_unique<qsyn::device::DeviceState>(std::move(buffer_device)));
                 } else {
-                    device_mgr.set(std::make_unique<qsyn::device::Device>(std::move(buffer_device)));
+                    device_mgr.set(std::make_unique<qsyn::device::DeviceState>(std::move(buffer_device)));
                 }
 
                 return CmdExecResult::done;
