@@ -82,6 +82,8 @@ struct APSPResult {
     std::vector<std::vector<std::optional<size_t>>> distance;
 };
 
+std::optional<Device> read_qsyn_device_file(std::string const& filename);
+
 APSPResult floyd_warshall(const Device& device);
 
 class PhysicalQubitState {
@@ -138,9 +140,6 @@ public:
     PhysicalQubitState& get_physical_qubit(QubitIdType id) { return _qubit_list[id]; }
     QubitIdType get_physical_by_logical(QubitIdType id);
     std::tuple<QubitIdType, QubitIdType> get_next_swap_cost(QubitIdType source, QubitIdType target);
-    bool qubit_id_exists(QubitIdType id) { return id < _qubit_list.size(); }
-
-    void add_physical_qubit(PhysicalQubitState q) { _qubit_list[q.get_id()] = q; }
 
     // NOTE - Duostra
     void apply_gate(qcir::QCirGate const& op, size_t time_begin);
@@ -171,13 +170,6 @@ private:
     std::shared_ptr<Device> _device;
     PhysicalQubitList _qubit_list;
     std::shared_ptr<APSPResult> _apsp;
-
-    // NOTE - Internal functions only used in reader
-    std::optional<std::pair<std::vector<size_t>, std::vector<size_t>>> _parse_gate_set(std::string const& gate_set_str);
-    bool _parse_singles(std::string const& data, std::vector<float>& container);
-    bool _parse_float_pairs(std::string const& data, std::vector<std::vector<float>>& containers);
-    bool _parse_size_t_pairs(std::string const& data, std::vector<std::vector<size_t>>& containers);
-    bool _parse_info(std::ifstream& f, std::vector<std::vector<float>>& cx_error, std::vector<std::vector<float>>& cx_delay, std::vector<float>& single_error, std::vector<float>& single_delay);
 };
 
 }  // namespace qsyn::device

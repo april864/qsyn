@@ -4,6 +4,7 @@ debug/
 qsyn*
 !src/qsyn*
 !src/qsyn/qsyn*
+!src/device/qsyn_device_file.cpp
 
 # for work-in-progress things
 wip/
