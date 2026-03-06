@@ -71,7 +71,7 @@ size_t DeviceState::get_delay(qcir::QCirGate const& inst) const {
  */
 std::vector<GateInfo> const& Device::get_adjacency_pair_info(size_t a, size_t b) {
     if (a > b) std::swap(a, b);
-    return _adjacency_info[std::make_pair(a, b)];
+    return _2q_gate_info[std::make_pair(a, b)];
 }
 
 /**
@@ -81,7 +81,7 @@ std::vector<GateInfo> const& Device::get_adjacency_pair_info(size_t a, size_t b)
  * @return const Info&
  */
 std::vector<GateInfo> const& Device::get_qubit_info(size_t a) {
-    return _qubit_info[a];
+    return _1q_gate_info[a];
 }
 
 /**
@@ -93,7 +93,7 @@ std::vector<GateInfo> const& Device::get_qubit_info(size_t a) {
  */
 void Device::add_adjacency_info(size_t a, size_t b, GateInfo info) {
     if (a > b) std::swap(a, b);
-    _adjacency_info[std::make_pair(a, b)].emplace_back(info);
+    _2q_gate_info[std::make_pair(a, b)].emplace_back(info);
 }
 
 /**
@@ -103,7 +103,7 @@ void Device::add_adjacency_info(size_t a, size_t b, GateInfo info) {
  * @param info
  */
 void Device::add_qubit_info(size_t a, GateInfo info) {
-    _qubit_info[a].emplace_back(info);
+    _1q_gate_info[a].emplace_back(info);
 }
 
 /**
@@ -129,7 +129,7 @@ APSPResult floyd_warshall(const Device& device) {
     }
 
     // Set weights of direct edges from adjacency information
-    for (auto const& [adj, _] : device.get_adjacency_info()) {
+    for (auto const& [adj, _] : device.get_2q_gate_info_map()) {
         auto const& [i, j]       = adj;
         result.distance[i][j]    = 1;
         result.distance[j][i]    = 1;
@@ -181,9 +181,9 @@ APSPResult floyd_warshall(const Device& device) {
  */
 void Device::print_single_edge(size_t a, size_t b) const {
     auto query = (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
-    if (_adjacency_info.contains(query)) {
+    if (_2q_gate_info.contains(query)) {
         fmt::println("({:>3}, {:>3})    Delay: {:>8.3f}    Error: {:>8.5f}",
-                     a, b, _adjacency_info.at(query)[0].time, _adjacency_info.at(query)[0].error);
+                     a, b, _2q_gate_info.at(query)[0].time, _2q_gate_info.at(query)[0].error);
     } else {
         fmt::println("No connection between {:>3} and {:>3}.", a, b);
     }

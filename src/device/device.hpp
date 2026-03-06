@@ -43,16 +43,15 @@ class Device {
     };
 
 public:
-    using AdjacencyPair     = std::pair<size_t, size_t>;
-    using PhysicalQubitInfo = std::unordered_map<size_t, std::vector<GateInfo>>;
-    using AdjacencyMap      = std::unordered_map<AdjacencyPair, std::vector<GateInfo>, AdjacencyPairHash>;
-    Device() {}
+    using QubitPair           = std::pair<size_t, size_t>;
+    using OneQubitGateInfoMap = std::unordered_map<size_t, std::vector<GateInfo>>;
+    using TwoQubitGateInfoMap = std::unordered_map<QubitPair, std::vector<GateInfo>, AdjacencyPairHash>;
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
     std::vector<GateInfo> const& get_adjacency_pair_info(size_t a, size_t b);
     std::vector<GateInfo> const& get_qubit_info(size_t a);
-    size_t get_num_adjacencies() const { return _adjacency_info.size(); }
+    size_t get_num_adjacencies() const { return _2q_gate_info.size(); }
     size_t get_num_qubits() const { return _num_qubit; }
     void set_num_qubits(size_t n) { _num_qubit = n; }
     void set_name(std::string n) { _name = std::move(n); }
@@ -61,14 +60,14 @@ public:
     void add_qubit_info(size_t a, GateInfo info);
 
     void print_single_edge(size_t a, size_t b) const;
-    AdjacencyMap const& get_adjacency_info() const { return _adjacency_info; }
+    TwoQubitGateInfoMap const& get_2q_gate_info_map() const { return _2q_gate_info; }
 
 private:
     std::string _name;
     size_t _num_qubit{0};
     std::vector<std::string> _gate_set;
-    PhysicalQubitInfo _qubit_info;
-    AdjacencyMap _adjacency_info;
+    OneQubitGateInfoMap _1q_gate_info;
+    TwoQubitGateInfoMap _2q_gate_info;
 };
 
 struct APSPResult {
