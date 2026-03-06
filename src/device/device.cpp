@@ -69,7 +69,7 @@ size_t DeviceState::get_delay(qcir::QCirGate const& inst) const {
  * @param b Id of second qubit
  * @return Info&
  */
-DeviceInfo const& Device::get_adjacency_pair_info(size_t a, size_t b) {
+std::vector<GateInfo> const& Device::get_adjacency_pair_info(size_t a, size_t b) {
     if (a > b) std::swap(a, b);
     return _adjacency_info[std::make_pair(a, b)];
 }
@@ -80,7 +80,7 @@ DeviceInfo const& Device::get_adjacency_pair_info(size_t a, size_t b) {
  * @param a
  * @return const Info&
  */
-DeviceInfo const& Device::get_qubit_info(size_t a) {
+std::vector<GateInfo> const& Device::get_qubit_info(size_t a) {
     return _qubit_info[a];
 }
 
@@ -91,9 +91,9 @@ DeviceInfo const& Device::get_qubit_info(size_t a) {
  * @param b Id of second qubit
  * @param info Information of this pair
  */
-void Device::add_adjacency_info(size_t a, size_t b, DeviceInfo info) {
+void Device::add_adjacency_info(size_t a, size_t b, GateInfo info) {
     if (a > b) std::swap(a, b);
-    _adjacency_info[std::make_pair(a, b)] = info;
+    _adjacency_info[std::make_pair(a, b)].emplace_back(info);
 }
 
 /**
@@ -102,8 +102,8 @@ void Device::add_adjacency_info(size_t a, size_t b, DeviceInfo info) {
  * @param a
  * @param info
  */
-void Device::add_qubit_info(size_t a, DeviceInfo info) {
-    _qubit_info[a] = info;
+void Device::add_qubit_info(size_t a, GateInfo info) {
+    _qubit_info[a].emplace_back(info);
 }
 
 /**
@@ -182,7 +182,8 @@ APSPResult floyd_warshall(const Device& device) {
 void Device::print_single_edge(size_t a, size_t b) const {
     auto query = (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     if (_adjacency_info.contains(query)) {
-        fmt::println("({:>3}, {:>3})    Delay: {:>8.3f}    Error: {:>8.5f}", a, b, _adjacency_info.at(query)._time, _adjacency_info.at(query)._error);
+        fmt::println("({:>3}, {:>3})    Delay: {:>8.3f}    Error: {:>8.5f}",
+                     a, b, _adjacency_info.at(query)[0].time, _adjacency_info.at(query)[0].error);
     } else {
         fmt::println("No connection between {:>3} and {:>3}.", a, b);
     }
@@ -283,8 +284,6 @@ void DeviceState::add_adjacency(QubitIdType a, QubitIdType b) {
     if (a > b) std::swap(a, b);
     _qubit_list[a].add_adjacency(_qubit_list[b].get_id());
     _qubit_list[b].add_adjacency(_qubit_list[a].get_id());
-    constexpr DeviceInfo default_info = {._time = 0.0, ._error = 0.0};
-    _topology->add_adjacency_info(a, b, default_info);
 }
 
 /**
@@ -424,7 +423,10 @@ bool DeviceState::read_device(std::string const& filename) {
         std::getline(topo_file, str);
         str = dvlab::str::trim_spaces(dvlab::str::trim_comments(str));
     }
-    if (!_parse_gate_set(str)) return false;
+
+    auto gate_idxs = _parse_gate_set(str);
+    if (!gate_idxs.has_value()) return false;
+    auto const& [one_qubit_gate_idxs, two_qubit_gate_idxs] = gate_idxs.value();
 
     // NOTE - Coupling map
     str = "", token = "", data = "";
@@ -456,15 +458,30 @@ bool DeviceState::read_device(std::string const& filename) {
     for (size_t i = 0; i < adj_list.size(); i++) {
         for (size_t j = 0; j < adj_list[i].size(); j++) {
             if (adj_list[i][j] > i) {
+                // Populate the physical adjacency graph used by Duostra / DFSPlacer, etc.
                 add_adjacency(i, adj_list[i][j]);
-                _topology->add_adjacency_info(i, adj_list[i][j], {._time = cx_delay[i][j], ._error = cx_err[i][j]});
+
+                // NOTE - Qsyn's device file format does not specify per gate type delays and errors.
+                // Therefore, we assume all two-qubit gates have the same delays and errors.
+                for (auto const& gate_idx : two_qubit_gate_idxs) {
+                    _topology->add_adjacency_info(i, adj_list[i][j],  //
+                                                  {.gate_idx = gate_idx,
+                                                   .time     = cx_delay[i][j],
+                                                   .error    = cx_err[i][j]});
+                }
             }
         }
     }
 
     assert(sg_err.size() == sg_delay.size());
     for (size_t i = 0; i < sg_err.size(); i++) {
-        _topology->add_qubit_info(i, {._time = sg_delay[i], ._error = sg_err[i]});
+        // NOTE - Qsyn's device file format does not specify per gate type delays and errors.
+        // Therefore, we assume all one-qubit gates have the same delays and errors.
+        for (auto const& gate_idx : one_qubit_gate_idxs) {
+            _topology->add_qubit_info(i, {.gate_idx = gate_idx,
+                                          .time     = sg_delay[i],
+                                          .error    = sg_err[i]});
+        }
     }
 
     calculate_path();
@@ -478,28 +495,50 @@ bool DeviceState::read_device(std::string const& filename) {
  * @return true
  * @return false
  */
-bool DeviceState::_parse_gate_set(std::string const& gate_set_str) {
+std::optional<std::pair<std::vector<size_t>, std::vector<size_t>>>
+DeviceState::_parse_gate_set(std::string const& gate_set_str) {
     std::string _;
     auto const token_end = dvlab::str::str_get_token(gate_set_str, _, 0, ": ");
     auto data            = gate_set_str.substr(token_end + 1);
     data                 = dvlab::str::trim_spaces(data);
     data                 = dvlab::str::remove_brackets(data, '{', '}');
-    auto gate_set_view =
-        dvlab::str::views::tokenize(data, ',') |
-        std::views::transform([](auto const& str) { return dvlab::str::tolower_string(str); }) |
-        std::views::transform([&](auto const& str) -> std::optional<std::string> {
-            if (auto op = qcir::str_to_operation(str); op.has_value()) {
-                _topology->add_gate_type(op->get_repr().substr(0, op->get_repr().find_first_of('(')));
-                return std::make_optional(op->get_type());
-            }
-            if (auto op = qcir::str_to_operation(str, {dvlab::Phase()}); op.has_value()) {
-                _topology->add_gate_type(op->get_repr().substr(0, op->get_repr().find_first_of('(')));
-                return std::make_optional(op->get_type());
-            }
-            return std::nullopt;
-        });
 
-    return std::ranges::all_of(gate_set_view, [](auto const& gate_type) { return gate_type.has_value(); });
+    std::pair<std::vector<size_t>, std::vector<size_t>> gate_idxs;  // one and two-qubit gate indices
+
+    auto gate_type_view =
+        dvlab::str::views::tokenize(data, ',') |
+        std::views::transform([](auto const& str) { return dvlab::str::tolower_string(str); });
+
+    size_t gate_idx       = 0;
+    auto const process_op = [&](auto const& op_opt, std::string const& gate_type) -> bool {
+        if (!op_opt.has_value()) {
+            return false;
+        }
+
+        auto const& op = *op_opt;
+        if (op.get_num_qubits() == 1) {
+            gate_idxs.first.emplace_back(gate_idx);
+        } else if (op.get_num_qubits() == 2) {
+            gate_idxs.second.emplace_back(gate_idx);
+        } else {
+            spdlog::error("Unsupported gate type ({})!!", gate_type);
+            spdlog::error("Only one-qubit and two-qubit gates are supported for device");
+            return false;
+        }
+
+        _topology->add_gate_type(op.get_repr().substr(0, op.get_repr().find_first_of('(')));
+        return true;
+    };
+
+    for (auto const& gate_type : gate_type_view) {
+        if (!process_op(qcir::str_to_operation(gate_type), gate_type) &&
+            !process_op(qcir::str_to_operation(gate_type, {dvlab::Phase()}), gate_type)) {
+            return std::nullopt;
+        }
+        gate_idx++;
+    }
+
+    return gate_idxs;
 }
 
 /**
@@ -648,13 +687,13 @@ void DeviceState::print_qubits(std::vector<size_t> candidates) const {
     }
     if (candidates.empty()) {
         for (size_t i = 0; i < qubits.size(); i++) {
-            fmt::println("ID: {:>3}    {}Adjs: {:>3}", i, _topology->get_qubit_info(i), fmt::join(qubits[i].get_adjacencies(), " "));
+            fmt::println("ID: {:>3}    {}Adjs: {:>3}", i, _topology->get_qubit_info(i)[0], fmt::join(qubits[i].get_adjacencies(), " "));
         }
         fmt::println("Total #Qubits: {}", _num_qubit);
     } else {
         std::ranges::sort(candidates);
         for (auto& p : candidates) {
-            fmt::println("ID: {:>3}    {}Adjs: {:>3}", p, _topology->get_qubit_info(p), fmt::join(qubits[p].get_adjacencies(), " "));
+            fmt::println("ID: {:>3}    {}Adjs: {:>3}", p, _topology->get_qubit_info(p)[0], fmt::join(qubits[p].get_adjacencies(), " "));
         }
     }
 }

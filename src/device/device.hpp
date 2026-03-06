@@ -24,17 +24,13 @@ class QCirGate;
 
 namespace qsyn::device {
 
-class DeviceState;
-class Device;
-class PhysicalQubitState;
-struct DeviceInfo;
-
-struct DeviceInfo {
-    float _time;
-    float _error;
+struct GateInfo {
+    size_t gate_idx;  // index of this gate in the _gate_set of the device
+    float time;
+    float error;
 };
 
-std::ostream& operator<<(std::ostream& os, DeviceInfo const& info);
+std::ostream& operator<<(std::ostream& os, GateInfo const& info);
 
 class Device {
     struct AdjacencyPairHash {
@@ -48,21 +44,21 @@ class Device {
 
 public:
     using AdjacencyPair     = std::pair<size_t, size_t>;
-    using PhysicalQubitInfo = std::unordered_map<size_t, DeviceInfo>;
-    using AdjacencyMap      = std::unordered_map<AdjacencyPair, DeviceInfo, AdjacencyPairHash>;
+    using PhysicalQubitInfo = std::unordered_map<size_t, std::vector<GateInfo>>;
+    using AdjacencyMap      = std::unordered_map<AdjacencyPair, std::vector<GateInfo>, AdjacencyPairHash>;
     Device() {}
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
-    DeviceInfo const& get_adjacency_pair_info(size_t a, size_t b);
-    DeviceInfo const& get_qubit_info(size_t a);
+    std::vector<GateInfo> const& get_adjacency_pair_info(size_t a, size_t b);
+    std::vector<GateInfo> const& get_qubit_info(size_t a);
     size_t get_num_adjacencies() const { return _adjacency_info.size(); }
     size_t get_num_qubits() const { return _num_qubit; }
     void set_num_qubits(size_t n) { _num_qubit = n; }
     void set_name(std::string n) { _name = std::move(n); }
     void add_gate_type(std::string const& gt) { _gate_set.emplace_back(gt); }
-    void add_adjacency_info(size_t a, size_t b, DeviceInfo info);
-    void add_qubit_info(size_t a, DeviceInfo info);
+    void add_adjacency_info(size_t a, size_t b, GateInfo info);
+    void add_qubit_info(size_t a, GateInfo info);
 
     void print_single_edge(size_t a, size_t b) const;
     AdjacencyMap const& get_adjacency_info() const { return _adjacency_info; }
@@ -174,7 +170,7 @@ private:
     std::shared_ptr<APSPResult> _apsp;
 
     // NOTE - Internal functions only used in reader
-    bool _parse_gate_set(std::string const& gate_set_str);
+    std::optional<std::pair<std::vector<size_t>, std::vector<size_t>>> _parse_gate_set(std::string const& gate_set_str);
     bool _parse_singles(std::string const& data, std::vector<float>& container);
     bool _parse_float_pairs(std::string const& data, std::vector<std::vector<float>>& containers);
     bool _parse_size_t_pairs(std::string const& data, std::vector<std::vector<size_t>>& containers);
@@ -184,11 +180,11 @@ private:
 }  // namespace qsyn::device
 
 template <>
-struct fmt::formatter<qsyn::device::DeviceInfo> {
+struct fmt::formatter<qsyn::device::GateInfo> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(qsyn::device::DeviceInfo const& info, FormatContext& ctx) {
-        return fmt::format_to(ctx.out(), "Delay: {:>7.3}    Error: {:7.3}    ", info._time, info._error);
+    auto format(qsyn::device::GateInfo const& info, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "Delay: {:>7.3}    Error: {:7.3}    ", info.time, info.error);
     }
 };
