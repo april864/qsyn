@@ -251,7 +251,6 @@ std::optional<Device> read_qsyn_device_file(std::string const& filename) {
         spdlog::error("The number of qubit is not a positive integer!!");
         return std::nullopt;
     }
-    device.set_num_qubits(qbn.value());
     // NOTE - Gate set
     str = "", token = "", data = "";
     while (str.empty()) {
@@ -307,25 +306,12 @@ std::optional<Device> read_qsyn_device_file(std::string const& filename) {
         // Therefore, we assume all one-qubit gates have the same delays and errors.
         for (auto const& gate_idx : one_qubit_gate_idxs) {
             device.add_gate_info(i, {.gate_idx = gate_idx,
-                                    .time     = sg_delay[i],
-                                    .error    = sg_err[i]});
+                                     .time     = sg_delay[i],
+                                     .error    = sg_err[i]});
         }
     }
 
     return device;
 }
 
-bool DeviceState::read_device(std::string const& filename) {
-    auto device = read_qsyn_device_file(filename);
-    if (!device) return false;
-    _device = std::make_shared<Device>(std::move(*device));
-    _num_qubit = _device->get_num_qubits();
-    _qubit_list.clear();
-    _qubit_list.reserve(_num_qubit);
-    for (size_t i = 0; i < _num_qubit; ++i) {
-        _qubit_list.emplace_back(PhysicalQubitState(i));
-    }
-    calculate_path();
-    return true;
-}
 }  // namespace qsyn::device

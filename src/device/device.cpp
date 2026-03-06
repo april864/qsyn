@@ -239,6 +239,14 @@ void PhysicalQubitState::reset() {
 
 // SECTION - Class Device Member Functions
 
+DeviceState::DeviceState(Device device) : _device(std::make_shared<Device>(std::move(device))) {
+    _qubit_list.reserve(_device->get_num_qubits());
+    for (size_t i = 0; i < _device->get_num_qubits(); ++i) {
+        _qubit_list.emplace_back(PhysicalQubitState(i));
+    }
+    calculate_path();
+}
+
 /**
  * @brief Get next swap cost
  *
@@ -363,143 +371,6 @@ std::vector<PhysicalQubitState> DeviceState::get_path(QubitIdType src, QubitIdTy
         path.emplace_back(_qubit_list.at(new_pred));
     }
     return path;
-}
-
-/**
- * @brief Print physical qubits and their adjacencies
- *
- * @param cand a vector of qubits to be printed
- */
-void DeviceState::print_qubits(std::vector<size_t> candidates) const {
-    for (auto& c : candidates) {
-        if (c >= _num_qubit) {
-            spdlog::error("Error: the maximum qubit id is {}!!", _num_qubit - 1);
-            return;
-        }
-    }
-    fmt::println("");
-    std::vector<PhysicalQubitState> qubits;
-    qubits.resize(_num_qubit);
-    for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
-        qubits[idx] = info;
-    }
-    if (candidates.empty()) {
-        for (size_t i = 0; i < qubits.size(); i++) {
-            fmt::println("ID: {:>3}    {}Adjs: {:>3}", i, _device->get_qubit_info(i)[0], fmt::join(_device->get_adjacencies(i), " "));
-        }
-        fmt::println("Total #Qubits: {}", _num_qubit);
-    } else {
-        std::ranges::sort(candidates);
-        for (auto& p : candidates) {
-            fmt::println("ID: {:>3}    {}Adjs: {:>3}", p, _device->get_qubit_info(p)[0], fmt::join(_device->get_adjacencies(p), " "));
-        }
-    }
-}
-
-/**
- * @brief Print device edge
- *
- * @param cand Empty: print all. Single element [a]: print edges connecting to a. Two elements [a,b]: print edge (a,b).
- */
-void DeviceState::print_edges(std::vector<size_t> candidates) const {
-    for (auto& c : candidates) {
-        if (c >= _num_qubit) {
-            spdlog::error("the maximum qubit id is {}!!", _num_qubit - 1);
-            return;
-        }
-    }
-    fmt::println("");
-    std::vector<PhysicalQubitState> qubits;
-    qubits.resize(_num_qubit);
-    for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
-        qubits[idx] = info;
-    }
-    if (candidates.empty()) {
-        size_t cnt = 0;
-        for (size_t i = 0; i < _num_qubit; i++) {
-            for (auto& q : _device->get_adjacencies(i)) {
-                if (std::cmp_less(i, q)) {
-                    cnt++;
-                    _device->print_single_edge(i, q);
-                }
-            }
-        }
-        assert(cnt == _device->get_num_adjacencies());
-        fmt::println("Total #Edges: {}", cnt);
-    } else if (candidates.size() == 1) {
-        for (auto& q : _device->get_adjacencies(candidates[0])) {
-            _device->print_single_edge(candidates[0], q);
-        }
-        fmt::println("Total #Edges: {}", _device->get_adjacencies(candidates[0]).size());
-    } else if (candidates.size() == 2) {
-        _device->print_single_edge(candidates[0], candidates[1]);
-    }
-}
-
-/**
- * @brief Print information of Topology
- *
- */
-void DeviceState::print_topology() const {
-    fmt::println("Topology: {} ({} qubits, {} edges)", get_name(), _qubit_list.size(), _device->get_num_adjacencies());
-    auto const tmp = _device->get_gate_set();  // circumvents g++ 11.4 compiler bug
-    fmt::println("Gate Set: {}", fmt::join(tmp | std::views::transform([](std::string const& gtype) { return dvlab::str::toupper_string(gtype); }), ", "));
-}
-
-/**
- * @brief Print shortest path from `s` to `t`
- *
- * @param s start
- * @param t terminate
- */
-void DeviceState::print_path(QubitIdType src, QubitIdType dest) const {
-    fmt::println("");
-    for (auto& c : {src, dest}) {
-        if (std::cmp_greater_equal(c, _num_qubit)) {
-            spdlog::error("the maximum qubit id is {}!!", _num_qubit - 1);
-            return;
-        }
-    }
-    std::vector<PhysicalQubitState> const& path = get_path(src, dest);
-    if (path.front().get_id() != src && path.back().get_id() != dest)
-        fmt::println("No path between {} and {}", src, dest);
-    else {
-        fmt::println("Path from {} to {}:", src, dest);
-        size_t cnt = 0;
-        for (auto& v : path) {
-            constexpr size_t num_cols = 10;
-            fmt::print("{:4} ", v.get_id());
-            if (++cnt % num_cols == 0) fmt::println("");
-        }
-    }
-}
-
-/**
- * @brief Print Mapping (Physical : Logical)
- *
- */
-void DeviceState::print_mapping() {
-    fmt::println("----------Mapping---------");
-    for (size_t i = 0; i < _num_qubit; i++) {
-        fmt::println("{:<5} : {}", i, _qubit_list[i].get_logical_qubit());
-    }
-}
-
-/**
- * @brief Print device status
- *
- */
-void DeviceState::print_status() const {
-    fmt::println("Device Status:");
-    std::vector<PhysicalQubitState> qubits;
-    qubits.resize(_num_qubit);
-    for (auto const& [idx, info] : tl::views::enumerate(_qubit_list)) {
-        qubits[idx] = info;
-    }
-    for (size_t i = 0; i < qubits.size(); ++i) {
-        fmt::println("{}", qubits[i]);
-    }
-    fmt::println("");
 }
 
 }  // namespace qsyn::device

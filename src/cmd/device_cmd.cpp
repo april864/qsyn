@@ -88,14 +88,17 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
                     .help("if specified, replace the current device; otherwise store to a new one");
             },
             [&device_mgr](ArgumentParser const& parser) {
-                qsyn::device::DeviceState buffer_device;
                 auto filepath = parser.get<std::string>("filepath");
                 auto replace  = parser.get<bool>("--replace");
 
-                if (!buffer_device.read_device(filepath)) {
+                auto device = read_qsyn_device_file(filepath);
+
+                if (!device.has_value()) {
                     spdlog::error("the format in \"{}\" has something wrong!!", filepath);
                     return CmdExecResult::error;
                 }
+
+                auto buffer_device = qsyn::device::DeviceState(std::move(device.value()));
 
                 if (device_mgr.empty() || !replace) {
                     device_mgr.add(device_mgr.get_next_id(), std::make_unique<qsyn::device::DeviceState>(std::move(buffer_device)));
@@ -198,61 +201,10 @@ device_list_cmd(qsyn::device::DeviceMgr& device_mgr) {
             }};
 }
 
-dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
-    return {"print",
-            [](ArgumentParser& parser) {
-                parser.description("print info of device topology");
-
-                auto mutex = parser.add_mutually_exclusive_group().required(false);
-
-                mutex.add_argument<size_t>("-e", "--edges")
-                    .nargs(0, 2)
-                    .help(
-                        "print information of edges. "
-                        "If no qubit ID is specified, print for all edges; "
-                        "if one qubit ID specified, list the adjacent edges to the qubit; "
-                        "if two qubit IDs are specified, list the edge between them");
-
-                mutex.add_argument<size_t>("-q", "--qubits")
-                    .nargs(NArgsOption::zero_or_more)
-                    .help(
-                        "print information of qubits. "
-                        "If no qubit ID is specified, print for all qubits;"
-                        "otherwise, print information of the specified qubit IDs");
-
-                mutex.add_argument<QubitIdType>("-p", "--path")
-                    .nargs(2)
-                    .metavar("(q1, q2)")
-                    .help(
-                        "print routing paths between q1 and q2");
-            },
-            [&device_mgr](ArgumentParser const& parser) {
-                if (!dvlab::utils::mgr_has_data(device_mgr)) return CmdExecResult::error;
-
-                if (parser.parsed("--edges")) {
-                    device_mgr.get()->print_edges(parser.get<std::vector<size_t>>("--edges"));
-                    return CmdExecResult::done;
-                }
-                if (parser.parsed("--qubits")) {
-                    device_mgr.get()->print_qubits(parser.get<std::vector<size_t>>("--qubits"));
-                    return CmdExecResult::done;
-                }
-                if (parser.parsed("--path")) {
-                    auto qids = parser.get<std::vector<QubitIdType>>("--path");
-                    device_mgr.get()->print_path(qids[0], qids[1]);
-                    return CmdExecResult::done;
-                }
-
-                device_mgr.get()->print_topology();
-                return CmdExecResult::done;
-            }};
-}
-
 dvlab::Command device_cmd(qsyn::device::DeviceMgr& device_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(device_mgr);
     // print functions
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_list_cmd(device_mgr));
-    cmd.add_subcommand("device-cmd-group", device_print_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_checkout_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_read_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_fetch_cmd(device_mgr));

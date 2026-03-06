@@ -53,8 +53,7 @@ public:
     std::vector<GateInfo> const& get_adjacency_pair_info(size_t a, size_t b);
     std::vector<GateInfo> const& get_qubit_info(size_t a);
     size_t get_num_adjacencies() const { return _2q_gate_info.size(); }
-    size_t get_num_qubits() const { return _num_qubit; }
-    void set_num_qubits(size_t n) { _num_qubit = n; }
+    size_t get_num_qubits() const { return _adjacency_map.size(); }
     void set_name(std::string n) { _name = std::move(n); }
     void add_gate_type(std::string const& gt) { _gate_set.emplace_back(gt); }
     void add_gate_info(std::pair<size_t, size_t> const& qubit_id_pair, GateInfo info);
@@ -70,7 +69,6 @@ public:
 
 private:
     std::string _name;
-    size_t _num_qubit{0};
     std::vector<std::string> _gate_set;
     OneQubitGateInfoMap _1q_gate_info;
     TwoQubitGateInfoMap _2q_gate_info;
@@ -132,10 +130,9 @@ private:
 class DeviceState {
 public:
     using PhysicalQubitList = std::vector<PhysicalQubitState>;
-    DeviceState() : _device{std::make_shared<Device>()} {}
-
+    DeviceState(Device device);
     std::string get_name() const { return _device->get_name(); }
-    size_t get_num_qubits() const { return _num_qubit; }
+    size_t get_num_qubits() const { return _device->get_num_qubits(); }
     PhysicalQubitList const& get_physical_qubit_list() const { return _qubit_list; }
     PhysicalQubitState& get_physical_qubit(QubitIdType id) { return _qubit_list[id]; }
     QubitIdType get_physical_by_logical(QubitIdType id);
@@ -150,23 +147,11 @@ public:
     void calculate_path();
     std::vector<PhysicalQubitState> get_path(QubitIdType src, QubitIdType dest) const;
 
-    bool read_device(std::string const& filename);
-
-    void print_qubits(std::vector<size_t> candidates = {}) const;
-    void print_edges(std::vector<size_t> candidates = {}) const;
-    void print_topology() const;
-    void print_predecessor() const;
-    void print_distance() const;
-    void print_path(QubitIdType src, QubitIdType dest) const;
-    void print_mapping();
-    void print_status() const;
-
     size_t get_delay(qcir::QCirGate const& inst) const;
 
     Device const& get_device() const { return *_device; }
 
 private:
-    size_t _num_qubit = 0;
     std::shared_ptr<Device> _device;
     PhysicalQubitList _qubit_list;
     std::shared_ptr<APSPResult> _apsp;
