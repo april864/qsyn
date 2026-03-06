@@ -98,12 +98,10 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
                     return CmdExecResult::error;
                 }
 
-                auto buffer_device = qsyn::device::DeviceState(std::move(device.value()));
-
                 if (device_mgr.empty() || !replace) {
-                    device_mgr.add(device_mgr.get_next_id(), std::make_unique<qsyn::device::DeviceState>(std::move(buffer_device)));
+                    device_mgr.add(device_mgr.get_next_id(), std::make_unique<qsyn::device::Device>(std::move(device.value())));
                 } else {
-                    device_mgr.set(std::make_unique<qsyn::device::DeviceState>(std::move(buffer_device)));
+                    device_mgr.set(std::make_unique<qsyn::device::Device>(std::move(device.value())));
                 }
 
                 return CmdExecResult::done;
