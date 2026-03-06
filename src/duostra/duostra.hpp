@@ -26,7 +26,7 @@ namespace duostra {
 
 class Duostra {
 public:
-    using Device = qsyn::device::DeviceState;
+    using DeviceState = qsyn::device::DeviceState;
     struct DuostraExecutionOptions {
         bool verify_result = false;
         bool silent        = false;
@@ -34,14 +34,14 @@ public:
     };
     Duostra(
         qcir::QCir* qcir,
-        Device dev,
+        DeviceState dev,
         DuostraConfig const& config,
         DuostraExecutionOptions const& exe_opts = {.verify_result = false, .silent = false, .use_tqdm = true});
 
     std::unique_ptr<qcir::QCir> const& get_physical_circuit() const { return _physical_circuit; }
     std::unique_ptr<qcir::QCir>&& get_physical_circuit() { return std::move(_physical_circuit); }
     std::vector<qcir::QCirGate> const& get_result() const { return _result; }
-    Device get_device() const { return _device; }
+    DeviceState get_device_state() const { return _device_state; }
 
     void make_dependency();
     bool map(bool use_device_as_placement = false);
@@ -50,7 +50,7 @@ public:
 private:
     std::unique_ptr<qcir::QCir> _physical_circuit =
         std::make_unique<qcir::QCir>();
-    Device _device;
+    DeviceState _device_state;
     DuostraConfig _config;
     bool _check;
     bool _tqdm;

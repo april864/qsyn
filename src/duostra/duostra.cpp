@@ -33,10 +33,10 @@ namespace qsyn::duostra {
  */
 Duostra::Duostra(
     QCir* cir,
-    Device dev,
+    DeviceState dev,
     DuostraConfig const& config,
     DuostraExecutionOptions const& exe_opts)
-    : _device(std::move(dev)),
+    : _device_state(std::move(dev)),
       _config{config},
       _check(exe_opts.verify_result),
       _tqdm{!exe_opts.silent && exe_opts.use_tqdm},
@@ -52,10 +52,10 @@ bool Duostra::map(bool use_device_as_placement) {
     std::unique_ptr<CircuitTopology> topo;
     topo            = make_unique<CircuitTopology>(_logical_circuit);
     auto check_topo = topo->clone();
-    auto check_device(_device);
+    auto check_device(_device_state);
 
     spdlog::info("Creating device...");
-    if (topo->get_num_qubits() > _device.get_num_qubits()) {
+    if (topo->get_num_qubits() > _device_state.get_num_qubits()) {
         spdlog::error("Number of logical qubits are larger than the device!!");
         return false;
     }
@@ -64,7 +64,7 @@ bool Duostra::map(bool use_device_as_placement) {
     if (!use_device_as_placement) {
         spdlog::info("Calculating Initial Placement...");
         auto placer = get_placer(_config.placer_type);
-        assign      = placer->place_and_assign(_device);
+        assign      = placer->place_and_assign(_device_state);
     }
     // scheduler
     spdlog::info("Creating Scheduler...");
@@ -77,7 +77,7 @@ bool Duostra::map(bool use_device_as_placement) {
             ? Router::CostStrategyType::end
             : Router::CostStrategyType::start;
     auto router = std::make_unique<Router>(
-        std::move(_device),
+        std::move(_device_state),
         _config.router_type,
         cost_strategy,
         _config.tie_breaking_strategy);
@@ -86,7 +86,7 @@ bool Duostra::map(bool use_device_as_placement) {
     if (!_silent) {
         fmt::println("Routing...");
     }
-    _device = scheduler->assign_gates_and_sort(std::move(router));
+    _device_state = scheduler->assign_gates_and_sort(std::move(router));
     if (stop_requested()) {
         spdlog::warn("Warning: mapping interrupted");
         return false;
@@ -149,7 +149,7 @@ bool Duostra::map(bool use_device_as_placement) {
  *
  */
 void Duostra::build_circuit_by_result() {
-    _physical_circuit->add_qubits(_device.get_num_qubits());
+    _physical_circuit->add_qubits(_device_state.get_num_qubits());
     for (auto const& operation : _result) {
         auto qubits = operation.get_qubits();
         QubitIdList qu;

@@ -46,6 +46,7 @@ public:
     using QubitPair           = std::pair<size_t, size_t>;
     using OneQubitGateInfoMap = std::unordered_map<size_t, std::vector<GateInfo>>;
     using TwoQubitGateInfoMap = std::unordered_map<QubitPair, std::vector<GateInfo>, AdjacencyPairHash>;
+    using AdjacencyMap        = std::unordered_map<size_t, std::vector<size_t>>;
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
@@ -56,11 +57,16 @@ public:
     void set_num_qubits(size_t n) { _num_qubit = n; }
     void set_name(std::string n) { _name = std::move(n); }
     void add_gate_type(std::string const& gt) { _gate_set.emplace_back(gt); }
-    void add_adjacency_info(size_t a, size_t b, GateInfo info);
-    void add_qubit_info(size_t a, GateInfo info);
+    void add_gate_info(std::pair<size_t, size_t> const& qubit_id_pair, GateInfo info);
+    void add_gate_info(size_t qubit_id, GateInfo info);
 
     void print_single_edge(size_t a, size_t b) const;
     TwoQubitGateInfoMap const& get_2q_gate_info_map() const { return _2q_gate_info; }
+
+    AdjacencyMap const& get_adjacency_map() const { return _adjacency_map; }
+    std::vector<size_t> const& get_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id); }
+    size_t get_num_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id).size(); }
+    bool is_adjacency(size_t a, size_t b) const { return dvlab::contains(_adjacency_map.at(a), b); }
 
 private:
     std::string _name;
@@ -68,6 +74,7 @@ private:
     std::vector<std::string> _gate_set;
     OneQubitGateInfoMap _1q_gate_info;
     TwoQubitGateInfoMap _2q_gate_info;
+    AdjacencyMap _adjacency_map;
 };
 
 struct APSPResult {
@@ -86,12 +93,9 @@ public:
     void set_id(QubitIdType id) { _id = id; }
     void set_occupied_time(size_t t) { _occupied_time = t; }
     void set_logical_qubit(std::optional<size_t> id) { _logical_qubit = id; }
-    void add_adjacency(size_t adj) { _adjacencies.emplace_back(adj); }
 
     auto get_id() const { return _id; }
     auto get_occupied_time() const { return _occupied_time; }
-    auto is_adjacency(PhysicalQubitState const& pq) const { return dvlab::contains(_adjacencies, pq.get_id()); }
-    auto const& get_adjacencies() const { return _adjacencies; }
     auto get_logical_qubit() const { return _logical_qubit; }
 
     // traversal
@@ -110,7 +114,6 @@ public:
 private:
     // NOTE - Device information
     QubitIdType _id = max_qubit_id;
-    Adjacencies _adjacencies;
 
     // NOTE - Duostra parameter
     std::optional<QubitIdType> _logical_qubit = std::nullopt;
@@ -127,9 +130,9 @@ private:
 class DeviceState {
 public:
     using PhysicalQubitList = std::vector<PhysicalQubitState>;
-    DeviceState() : _topology{std::make_shared<Device>()} {}
+    DeviceState() : _device{std::make_shared<Device>()} {}
 
-    std::string get_name() const { return _topology->get_name(); }
+    std::string get_name() const { return _device->get_name(); }
     size_t get_num_qubits() const { return _num_qubit; }
     PhysicalQubitList const& get_physical_qubit_list() const { return _qubit_list; }
     PhysicalQubitState& get_physical_qubit(QubitIdType id) { return _qubit_list[id]; }
@@ -137,8 +140,7 @@ public:
     std::tuple<QubitIdType, QubitIdType> get_next_swap_cost(QubitIdType source, QubitIdType target);
     bool qubit_id_exists(QubitIdType id) { return id < _qubit_list.size(); }
 
-    void add_physical_qubit(PhysicalQubitState q) { _qubit_list[q.get_id()] = std::move(q); }
-    void add_adjacency(QubitIdType a, QubitIdType b);
+    void add_physical_qubit(PhysicalQubitState q) { _qubit_list[q.get_id()] = q; }
 
     // NOTE - Duostra
     void apply_gate(qcir::QCirGate const& op, size_t time_begin);
@@ -162,9 +164,11 @@ public:
 
     size_t get_delay(qcir::QCirGate const& inst) const;
 
+    Device const& get_device() const { return *_device; }
+
 private:
     size_t _num_qubit = 0;
-    std::shared_ptr<Device> _topology;
+    std::shared_ptr<Device> _device;
     PhysicalQubitList _qubit_list;
     std::shared_ptr<APSPResult> _apsp;
 

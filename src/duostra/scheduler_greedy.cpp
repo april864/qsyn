@@ -57,13 +57,13 @@ std::unique_ptr<BaseScheduler> GreedyScheduler::clone() const {
  * @param router
  * @return Device
  */
-GreedyScheduler::Device GreedyScheduler::_assign_gates(std::unique_ptr<Router> router) {
+GreedyScheduler::DeviceState GreedyScheduler::_assign_gates(std::unique_ptr<Router> router) {
     [[maybe_unused]] size_t count = 0;
     auto topo_wrap                = TopologyCandidate(_circuit_topology, _conf.num_candidates);
     for (dvlab::TqdmWrapper bar{_circuit_topology.get_num_gates(), _tqdm};
          !topo_wrap.get_available_gates().empty(); ++bar) {
         if (stop_requested()) {
-            return router->get_device();
+            return router->get_device_state();
         }
         auto waitlist = topo_wrap.get_available_gates();
         assert(!waitlist.empty());
@@ -80,7 +80,7 @@ GreedyScheduler::Device GreedyScheduler::_assign_gates(std::unique_ptr<Router> r
         ++count;
     }
     assert(count == _circuit_topology.get_num_gates());
-    return router->get_device();
+    return router->get_device_state();
 }
 
 /**

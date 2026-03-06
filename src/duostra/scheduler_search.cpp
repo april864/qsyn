@@ -264,7 +264,7 @@ void SearchScheduler::_cache_when_necessary() {
  * @param router
  * @return Device
  */
-SearchScheduler::Device SearchScheduler::_assign_gates(std::unique_ptr<Router> router) {
+SearchScheduler::DeviceState SearchScheduler::_assign_gates(std::unique_ptr<Router> router) {
     auto total_gates = _circuit_topology.get_num_gates();
 
     auto root = make_unique<TreeNode>(
@@ -277,7 +277,7 @@ SearchScheduler::Device SearchScheduler::_assign_gates(std::unique_ptr<Router> r
     while (!root->done()) {
         // Update the _candidates.
         if (stop_requested()) {
-            return router->get_device();
+            return router->get_device_state();
         }
         auto selected_node = std::make_unique<TreeNode>(root->best_child(static_cast<int>(_lookahead)));
         root               = std::move(selected_node);
@@ -287,7 +287,7 @@ SearchScheduler::Device SearchScheduler::_assign_gates(std::unique_ptr<Router> r
             ++bar;
         }
     }
-    return router->get_device();
+    return router->get_device_state();
 }
 
 }  // namespace qsyn::duostra

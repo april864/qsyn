@@ -22,7 +22,7 @@ namespace qsyn::duostra {
 
 class BaseScheduler {
 public:
-    using Device = qsyn::device::DeviceState;
+    using DeviceState = qsyn::device::DeviceState;
     BaseScheduler(CircuitTopology topo, bool tqdm)
         : _circuit_topology(std::move(topo)), _tqdm(tqdm) {}
     virtual ~BaseScheduler() = default;
@@ -47,7 +47,7 @@ public:
     std::vector<size_t> const& get_available_gates() const { return _circuit_topology.get_available_gates(); }
     std::vector<GateInfo> const& get_operations() const { return _operations; }
 
-    Device assign_gates_and_sort(std::unique_ptr<Router> router);
+    DeviceState assign_gates_and_sort(std::unique_ptr<Router> router);
     size_t route_one_gate(Router& router, size_t gate_id, bool forget = false);
 
 protected:
@@ -55,30 +55,30 @@ protected:
     std::vector<GateInfo> _operations;
     bool _sorted = false;
     bool _tqdm   = true;
-    virtual Device _assign_gates(std::unique_ptr<Router> router);
+    virtual DeviceState _assign_gates(std::unique_ptr<Router> router);
     void _sort();
 };
 
 class RandomScheduler : public BaseScheduler {
 public:
-    using Device = BaseScheduler::Device;
+    using DeviceState = BaseScheduler::DeviceState;
     RandomScheduler(CircuitTopology const& topo, bool tqdm) : BaseScheduler(topo, tqdm) {}
 
     std::unique_ptr<BaseScheduler> clone() const override;
 
 protected:
-    Device _assign_gates(std::unique_ptr<Router> /*unused*/) override;
+    DeviceState _assign_gates(std::unique_ptr<Router> /*unused*/) override;
 };
 
 class NaiveScheduler : public BaseScheduler {
 public:
-    using Device = BaseScheduler::Device;
+    using DeviceState = BaseScheduler::DeviceState;
     NaiveScheduler(CircuitTopology const& topo, bool tqdm) : BaseScheduler(topo, tqdm) {}
 
     std::unique_ptr<BaseScheduler> clone() const override;
 
 protected:
-    Device _assign_gates(std::unique_ptr<Router> /*unused*/) override;
+    DeviceState _assign_gates(std::unique_ptr<Router> /*unused*/) override;
 };
 
 struct GreedyConf {
@@ -90,7 +90,7 @@ struct GreedyConf {
 
 class GreedyScheduler : public BaseScheduler {  // NOLINT(hicpp-special-member-functions, cppcoreguidelines-special-member-functions) : copy-swap idiom
 public:
-    using Device = BaseScheduler::Device;
+    using DeviceState = BaseScheduler::DeviceState;
     GreedyScheduler(CircuitTopology const& topo,
                     DuostraConfig config,
                     bool tqdm)
@@ -106,7 +106,7 @@ public:
 protected:
     GreedyConf _conf;
 
-    Device _assign_gates(std::unique_ptr<Router> /*unused*/) override;
+    DeviceState _assign_gates(std::unique_ptr<Router> /*unused*/) override;
 };
 
 struct TreeNodeConf {
@@ -193,7 +193,7 @@ private:
 
 class SearchScheduler : public GreedyScheduler {  // NOLINT(hicpp-special-member-functions, cppcoreguidelines-special-member-functions) : copy-swap idiom
 public:
-    using Device = GreedyScheduler::Device;
+    using DeviceState = GreedyScheduler::DeviceState;
     SearchScheduler(
         CircuitTopology const& topo,
         DuostraConfig config,
@@ -206,7 +206,7 @@ protected:
     bool _execute_single;
     size_t _lookahead;
 
-    Device _assign_gates(std::unique_ptr<Router> /*unused*/) override;
+    DeviceState _assign_gates(std::unique_ptr<Router> /*unused*/) override;
     void _cache_when_necessary();
 };
 

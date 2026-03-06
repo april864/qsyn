@@ -9,7 +9,6 @@
 #pragma once
 
 #include <memory>
-#include <random>
 #include <vector>
 
 #include "duostra/duostra_def.hpp"
@@ -23,41 +22,41 @@ namespace qsyn::duostra {
 
 class BasePlacer {
 public:
-    using Device = qsyn::device::DeviceState;
+    using DeviceState = qsyn::device::DeviceState;
     BasePlacer() {}
     virtual ~BasePlacer() = default;
 
-    std::vector<QubitIdType> place_and_assign(Device& device);
+    std::vector<QubitIdType> place_and_assign(DeviceState& device);
 
 protected:
-    virtual std::vector<QubitIdType> _place(Device&) const = 0;
+    virtual std::vector<QubitIdType> _place(DeviceState&) const = 0;
 };
 
 class RandomPlacer : public BasePlacer {
 public:
-    using Device = BasePlacer::Device;
+    using DeviceState = BasePlacer::DeviceState;
 
 protected:
-    std::vector<QubitIdType> _place(Device& /*unused*/) const override;
+    std::vector<QubitIdType> _place(DeviceState& /*unused*/) const override;
 };
 
 class StaticPlacer : public BasePlacer {
 public:
-    using Device = BasePlacer::Device;
+    using DeviceState = BasePlacer::DeviceState;
 
 protected:
-    std::vector<QubitIdType> _place(Device& /*unused*/) const override;
+    std::vector<QubitIdType> _place(DeviceState& /*unused*/) const override;
 };
 
 class DFSPlacer : public BasePlacer {
 public:
-    using Device = BasePlacer::Device;
+    using DeviceState = BasePlacer::DeviceState;
 
 protected:
-    std::vector<QubitIdType> _place(Device& /*unused*/) const override;
+    std::vector<QubitIdType> _place(DeviceState& /*unused*/) const override;
 
 private:
-    void _dfs_device(QubitIdType current, Device& device, std::vector<QubitIdType>& assign, std::vector<bool>& qubit_marks) const;
+    void _dfs_device(QubitIdType current, DeviceState& device, std::vector<QubitIdType>& assign, std::vector<bool>& qubit_marks) const;
 };
 
 std::unique_ptr<BasePlacer> get_placer(PlacerType type);

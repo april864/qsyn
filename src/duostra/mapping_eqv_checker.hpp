@@ -8,7 +8,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 #include <unordered_set>
 
 #include "device/device.hpp"
@@ -29,8 +28,8 @@ namespace duostra {
 
 class MappingEquivalenceChecker {
 public:
-    using Device = qsyn::device::DeviceState;
-    MappingEquivalenceChecker(qcir::QCir* phy, qcir::QCir* log, Device dev, PlacerType placer_type, std::vector<QubitIdType> init = {}, bool reverse = false);
+    using DeviceState = qsyn::device::DeviceState;
+    MappingEquivalenceChecker(qcir::QCir* phy, qcir::QCir* log, DeviceState dev, PlacerType placer_type, std::vector<QubitIdType> init = {}, bool reverse = false);
 
     bool check();
     bool is_swap(qcir::QCirGate* candidate);
@@ -44,7 +43,7 @@ public:
 private:
     qcir::QCir* _physical;
     qcir::QCir* _logical;
-    Device _device;
+    DeviceState _device_state;
     bool _reverse;
     // <qubit, gate to execute (from back)> for logical circuit
     std::unordered_map<QubitIdType, qcir::QCirGate*> _dependency;

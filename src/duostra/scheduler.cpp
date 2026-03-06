@@ -132,8 +132,8 @@ size_t BaseScheduler::get_operations_cost() const {
  * @param router
  * @return Device
  */
-BaseScheduler::Device BaseScheduler::assign_gates_and_sort(std::unique_ptr<Router> router) {
-    Device d = _assign_gates(std::move(router));
+BaseScheduler::DeviceState BaseScheduler::assign_gates_and_sort(std::unique_ptr<Router> router) {
+    DeviceState d = _assign_gates(std::move(router));
     _sort();
     return d;
 }
@@ -144,14 +144,14 @@ BaseScheduler::Device BaseScheduler::assign_gates_and_sort(std::unique_ptr<Route
  * @param router
  * @return Device
  */
-BaseScheduler::Device BaseScheduler::_assign_gates(std::unique_ptr<Router> router) {
+BaseScheduler::DeviceState BaseScheduler::_assign_gates(std::unique_ptr<Router> router) {
     for (dvlab::TqdmWrapper bar{_circuit_topology.get_num_gates()}; !bar.done(); ++bar) {
         if (stop_requested()) {
-            return router->get_device();
+            return router->get_device_state();
         }
         route_one_gate(*router, bar.idx());
     }
-    return router->get_device();
+    return router->get_device_state();
 }
 
 /**
@@ -194,12 +194,12 @@ std::unique_ptr<BaseScheduler> RandomScheduler::clone() const {
  * @param router
  * @return Device
  */
-RandomScheduler::Device RandomScheduler::_assign_gates(std::unique_ptr<Router> router) {
+RandomScheduler::DeviceState RandomScheduler::_assign_gates(std::unique_ptr<Router> router) {
     [[maybe_unused]] size_t count = 0;
 
     for (dvlab::TqdmWrapper bar{_circuit_topology.get_num_gates()}; !bar.done(); ++bar) {
         if (stop_requested()) {
-            return router->get_device();
+            return router->get_device_state();
         }
         auto& waitlist = _circuit_topology.get_available_gates();
         assert(!waitlist.empty());
@@ -211,7 +211,7 @@ RandomScheduler::Device RandomScheduler::_assign_gates(std::unique_ptr<Router> r
         ++count;
     }
     assert(count == _circuit_topology.get_num_gates());
-    return router->get_device();
+    return router->get_device_state();
 }
 
 // SECTION - Class StaticScheduler Member Functions
@@ -231,11 +231,11 @@ std::unique_ptr<BaseScheduler> NaiveScheduler::clone() const {
  * @param router
  * @return Device
  */
-NaiveScheduler::Device NaiveScheduler::_assign_gates(std::unique_ptr<Router> router) {
+NaiveScheduler::DeviceState NaiveScheduler::_assign_gates(std::unique_ptr<Router> router) {
     [[maybe_unused]] size_t count = 0;
     for (dvlab::TqdmWrapper bar{_circuit_topology.get_num_gates()}; !bar.done(); ++bar) {
         if (stop_requested()) {
-            return router->get_device();
+            return router->get_device_state();
         }
         auto& waitlist = _circuit_topology.get_available_gates();
         assert(!waitlist.empty());
@@ -246,7 +246,7 @@ NaiveScheduler::Device NaiveScheduler::_assign_gates(std::unique_ptr<Router> rou
         ++count;
     }
     assert(count == _circuit_topology.get_num_gates());
-    return router->get_device();
+    return router->get_device_state();
 }
 
 }  // namespace qsyn::duostra

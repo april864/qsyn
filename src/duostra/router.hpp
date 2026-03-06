@@ -43,7 +43,7 @@ public:
 
 class Router {
 public:
-    using Device        = qsyn::device::DeviceState;
+    using DeviceState   = qsyn::device::DeviceState;
     using PhysicalQubit = qsyn::device::PhysicalQubitState;
 
     enum CostStrategyType : std::uint8_t {
@@ -52,12 +52,12 @@ public:
     };
 
     using PriorityQueue = std::priority_queue<AStarNode, std::vector<AStarNode>, AStarComp>;
-    Router(Device device, RouterType type, CostStrategyType cost_strategy, MinMaxOptionType tie_breaking_strategy);
+    Router(DeviceState device, RouterType type, CostStrategyType cost_strategy, MinMaxOptionType tie_breaking_strategy);
 
     std::unique_ptr<Router> clone() const;
 
-    auto& get_device() { return _device; }
-    auto const& get_device() const { return _device; }
+    auto& get_device_state() { return _device_state; }
+    auto const& get_device_state() const { return _device_state; }
 
     size_t get_gate_cost(qcir::QCirGate const& gate, MinMaxOptionType min_max, size_t apsp_coeff);
     bool is_executable(qcir::QCirGate const& gate);
@@ -70,7 +70,7 @@ public:
 
 private:
     MinMaxOptionType _tie_breaking_strategy;
-    Device _device;
+    DeviceState _device_state;
     std::vector<QubitIdType> _logical_to_physical;
     bool _apsp : 1;
     bool _duostra : 1;
