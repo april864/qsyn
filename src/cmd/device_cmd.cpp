@@ -34,6 +34,52 @@ std::function<bool(size_t const&)> valid_device_id(qsyn::device::DeviceMgr const
     };
 };
 
+dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
+    return {
+        "print",
+        [](ArgumentParser& parser) {
+            parser.description("print Device information");
+            parser.add_argument<size_t>("ids")
+                .nargs(0, 2)
+                .help(
+                    "if not specified, print basic information about the device;\n"
+                    "if one ID is specified, print information about the qubit with the ID; \n"
+                    "if two IDs are specified, print information about the adjacency between the two qubits. An error will be reported if the two qubits are not adjacent.");
+        },
+        [&device_mgr](ArgumentParser const& parser) {
+            auto const ids = parser.get<std::vector<size_t>>("ids");
+            if (ids.size() == 0) {
+                fmt::println("{}", device_mgr.get()->info_string());
+
+            } else if (ids.size() == 1) {
+                auto gate_info = device_mgr.get()->gate_info_string(ids[0]);
+                if (!gate_info.has_value()) {
+                    spdlog::error("Qubit {} does not exist", ids[0]);
+                    return CmdExecResult::error;
+                }
+                fmt::println("{}", gate_info.value());
+            } else {
+                auto gate_info = device_mgr.get()->gate_info_string(std::make_pair(ids[0], ids[1]));
+                if (!gate_info.has_value()) {
+                    switch (gate_info.error()) {
+                        case TwoQubitGateInfoAccessError::invalid_first_qubit_id:
+                            spdlog::error("Qubit {} does not exist", ids[0]);
+                            break;
+                        case TwoQubitGateInfoAccessError::invalid_second_qubit_id:
+                            spdlog::error("Qubit {} does not exist", ids[1]);
+                            break;
+                        case TwoQubitGateInfoAccessError::invalid_qubit_pair:
+                            spdlog::error("Adjacency ({}, {}) does not exist", ids[0], ids[1]);
+                            break;
+                    }
+                    return CmdExecResult::error;
+                }
+                fmt::println("{}", gate_info.value());
+            }
+            return CmdExecResult::done;
+        }};
+}
+
 dvlab::Command device_checkout_cmd(qsyn::device::DeviceMgr& device_mgr) {
     return {"checkout",
             [&device_mgr](ArgumentParser& parser) {
@@ -203,6 +249,7 @@ dvlab::Command device_cmd(qsyn::device::DeviceMgr& device_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(device_mgr);
     // print functions
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_list_cmd(device_mgr));
+    cmd.add_subcommand("device-cmd-group", device_print_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_checkout_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_read_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_fetch_cmd(device_mgr));

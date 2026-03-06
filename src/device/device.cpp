@@ -88,30 +88,6 @@ APSPResult floyd_warshall(Device const& device) {
     return result;
 }
 
-// SECTION - Class Topology Member Functions
-
-/**
- * @brief Get the information of a single adjacency pair
- *
- * @param a Id of first qubit
- * @param b Id of second qubit
- * @return Info&
- */
-std::vector<GateInfo> const& Device::get_adjacency_pair_info(size_t a, size_t b) {
-    if (a > b) std::swap(a, b);
-    return _2q_gate_info[std::make_pair(a, b)];
-}
-
-/**
- * @brief Get the information of a qubit
- *
- * @param a
- * @return const Info&
- */
-std::vector<GateInfo> const& Device::get_qubit_info(size_t a) {
-    return _1q_gate_info[a];
-}
-
 /**
  * @brief Add adjacency information of (a,b)
  *
@@ -145,10 +121,42 @@ void Device::print_single_edge(size_t a, size_t b) const {
     auto query = (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     if (_2q_gate_info.contains(query)) {
         fmt::println("({:>3}, {:>3})    Delay: {:>8.3f}    Error: {:>8.5f}",
-                     a, b, _2q_gate_info.at(query)[0].time, _2q_gate_info.at(query)[0].error);
+                     a, b, _2q_gate_info.at(query)[0].time.count(), _2q_gate_info.at(query)[0].error);
     } else {
         fmt::println("No connection between {:>3} and {:>3}.", a, b);
     }
+}
+
+std::string Device::info_string() const {
+    return fmt::format("{} ({} qubits)", _name, _adjacency_map.size());
+}
+
+std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const {
+    if (!_1q_gate_info.contains(qubit_id)) {
+        return std::nullopt;
+    }
+    std::string result = fmt::format("Qubit {}:\n", qubit_id);
+    for (auto const& [gate_idx, time, error] : _1q_gate_info.at(qubit_id)) {
+        result += fmt::format("- {:>4}: Delay: {:>8.3} (ns)    Error: {:>8.5}\n", _gate_set[gate_idx], time.count(), error);
+    }
+    return result;
+}
+
+tl::expected<std::string, TwoQubitGateInfoAccessError> Device::gate_info_string(QubitPair const& qubit_pair) const {
+    if (!_2q_gate_info.contains(qubit_pair)) {
+        return tl::unexpected(TwoQubitGateInfoAccessError::invalid_qubit_pair);
+    }
+    if (!_1q_gate_info.contains(qubit_pair.first)) {
+        return tl::unexpected(TwoQubitGateInfoAccessError::invalid_first_qubit_id);
+    }
+    if (!_1q_gate_info.contains(qubit_pair.second)) {
+        return tl::unexpected(TwoQubitGateInfoAccessError::invalid_second_qubit_id);
+    }
+    std::string result = fmt::format("Adjacency ({}, {}):\n", qubit_pair.first, qubit_pair.second);
+    for (auto const& [gate_idx, time, error] : _2q_gate_info.at(qubit_pair)) {
+        result += fmt::format("- {:>4}: Delay: {:>8.3} (ns)    Error: {:>8.5}\n", _gate_set[gate_idx], time.count(), error);
+    }
+    return result;
 }
 
 }  // namespace qsyn::device

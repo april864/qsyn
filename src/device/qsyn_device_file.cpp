@@ -292,9 +292,9 @@ std::optional<Device> read_qsyn_device_file(std::string const& filename) {
                     // might have different delays and errors.
                     // We will pretend they do for backward compatibility.
                     device.add_gate_info(
-                        std::make_pair(i, adj_list[i][j]), {.gate_idx = gate_idx, .time = cx_delay[i][j], .error = cx_err[i][j]});
+                        std::make_pair(i, adj_list[i][j]), GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
                     device.add_gate_info(
-                        std::make_pair(adj_list[i][j], i), {.gate_idx = gate_idx, .time = cx_delay[i][j], .error = cx_err[i][j]});
+                        std::make_pair(adj_list[i][j], i), GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
                 }
             }
         }
@@ -305,9 +305,9 @@ std::optional<Device> read_qsyn_device_file(std::string const& filename) {
         // NOTE - Qsyn's device file format does not specify per gate type delays and errors.
         // Therefore, we assume all one-qubit gates have the same delays and errors.
         for (auto const& gate_idx : one_qubit_gate_idxs) {
-            device.add_gate_info(i, {.gate_idx = gate_idx,
-                                     .time     = sg_delay[i],
-                                     .error    = sg_err[i]});
+            device.add_gate_info(i, GateInfo{.gate_idx = gate_idx,
+                                             .time     = GateDelayNanoSec{sg_delay[i]},
+                                             .error    = sg_err[i]});
         }
     }
 

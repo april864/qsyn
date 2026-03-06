@@ -9,8 +9,10 @@
 
 #include <fmt/core.h>
 
+#include <chrono>
 #include <cstddef>
 #include <string>
+#include <tl/expected.hpp>
 #include <unordered_map>
 
 #include "qsyn/qsyn_type.hpp"
@@ -18,10 +20,19 @@
 
 namespace qsyn::device {
 
+/** Gate delay in nanoseconds (float for fractional ns). */
+using GateDelayNanoSec = std::chrono::duration<float, std::nano>;
+
 struct GateInfo {
     size_t gate_idx;  // index of this gate in the _gate_set of the device
-    float time;
+    GateDelayNanoSec time;
     float error;
+};
+
+enum struct TwoQubitGateInfoAccessError : uint8_t {
+    invalid_first_qubit_id,
+    invalid_second_qubit_id,
+    invalid_qubit_pair,
 };
 
 std::ostream& operator<<(std::ostream& os, GateInfo const& info);
@@ -37,6 +48,7 @@ class Device {
     };
 
 public:
+    virtual ~Device()         = default;
     using QubitPair           = std::pair<size_t, size_t>;
     using OneQubitGateInfoMap = std::unordered_map<size_t, std::vector<GateInfo>>;
     using TwoQubitGateInfoMap = std::unordered_map<QubitPair, std::vector<GateInfo>, AdjacencyPairHash>;
@@ -44,13 +56,11 @@ public:
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
-    std::vector<GateInfo> const& get_adjacency_pair_info(size_t a, size_t b);
-    std::vector<GateInfo> const& get_qubit_info(size_t a);
     size_t get_num_adjacencies() const { return _2q_gate_info.size(); }
     size_t get_num_qubits() const { return _adjacency_map.size(); }
     void set_name(std::string n) { _name = std::move(n); }
     void add_gate_type(std::string const& gt) { _gate_set.emplace_back(gt); }
-    void add_gate_info(std::pair<size_t, size_t> const& qubit_id_pair, GateInfo info);
+    void add_gate_info(QubitPair const& qubit_id_pair, GateInfo info);
     void add_gate_info(size_t qubit_id, GateInfo info);
 
     void print_single_edge(size_t a, size_t b) const;
@@ -61,7 +71,12 @@ public:
     size_t get_num_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id).size(); }
     bool is_adjacency(size_t a, size_t b) const { return dvlab::contains(_adjacency_map.at(a), b); }
 
-private:
+    virtual std::string info_string() const;
+
+    std::optional<std::string> gate_info_string(std::size_t qubit_id) const;
+    tl::expected<std::string, TwoQubitGateInfoAccessError> gate_info_string(QubitPair const& qubit_pair) const;
+
+protected:
     std::string _name;
     std::vector<std::string> _gate_set;
     OneQubitGateInfoMap _1q_gate_info;
@@ -86,6 +101,6 @@ struct fmt::formatter<qsyn::device::GateInfo> {
 
     template <typename FormatContext>
     auto format(qsyn::device::GateInfo const& info, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "Delay: {:>7.3}    Error: {:7.3}    ", info.time, info.error);
+        return fmt::format_to(ctx.out(), "Delay: {:>7.3}    Error: {:7.3}    ", info.time.count(), info.error);
     }
 };

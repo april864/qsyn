@@ -12,6 +12,8 @@
 #include <optional>
 #include <string_view>
 
+#include "device/device.hpp"
+
 namespace qsyn::device {
 
 enum struct IBMQDeviceJsonsSource : std::uint8_t {
@@ -26,6 +28,13 @@ struct IBMQDeviceJsons {
     nlohmann::json device_json;
     nlohmann::json properties_json;
 };
+
+class IBMQDevice : public Device {
+    // No specialization for now. That said, we would probably
+    // want to add some IBMQ-specific fields here in the future
+};
+
+auto read_ibmq_device(IBMQDeviceJsons const& jsons) -> std::optional<IBMQDevice>;
 
 auto read_ibmq_devices_jsons(std::filesystem::path const& device_path,
                              std::filesystem::path const& properties_path,
