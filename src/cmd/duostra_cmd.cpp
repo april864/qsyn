@@ -215,7 +215,7 @@ Command mapping_equivalence_check_cmd(qcir::QCirMgr& qcir_mgr, device::DeviceMgr
             if (physical_qc == nullptr || logical_qc == nullptr) {
                 return CmdExecResult::error;
             }
-            MappingEquivalenceChecker mpeqc(physical_qc, logical_qc, qsyn::device::DeviceState(*device_mgr.get()), DUOSTRA_CONFIG.placer_type, {});
+            MappingEquivalenceChecker mpeqc(physical_qc, logical_qc, qsyn::duostra::DeviceState(*device_mgr.get()), DUOSTRA_CONFIG.placer_type, {});
             if (mpeqc.check()) {
                 fmt::println("{}", styled_if_ansi_supported("Equivalent up to permutation", fmt::fg(fmt::terminal_color::green) | fmt::emphasis::bold));
             } else {
@@ -261,7 +261,7 @@ Command duostra_cmd(qcir::QCirMgr& qcir_mgr, device::DeviceMgr& device_mgr) {
                            auto filename            = qcir_mgr.get_filename();
                            auto procedures          = qcir_mgr.get_procedures();
                            Duostra duo{logical_qcir,
-                                       qsyn::device::DeviceState(*device_mgr.get()),
+                                       qsyn::duostra::DeviceState(*device_mgr.get()),
                                        DUOSTRA_CONFIG,
                                        {.verify_result = parser.get<bool>("--check"),
                                         .silent        = parser.get<bool>("--silent"),

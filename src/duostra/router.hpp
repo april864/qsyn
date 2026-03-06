@@ -12,6 +12,7 @@
 
 #include "./duostra_def.hpp"
 #include "device/device.hpp"
+#include "duostra/device_state.hpp"
 #include "qcir/qcir_gate.hpp"
 #include "qsyn/qsyn_type.hpp"
 
@@ -43,8 +44,8 @@ public:
 
 class Router {
 public:
-    using DeviceState   = qsyn::device::DeviceState;
-    using PhysicalQubit = qsyn::device::PhysicalQubitState;
+    using DeviceState   = qsyn::duostra::DeviceState;
+    using PhysicalQubit = qsyn::duostra::PhysicalQubitState;
 
     enum CostStrategyType : std::uint8_t {
         start,

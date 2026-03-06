@@ -17,12 +17,13 @@
 #include "./duostra_def.hpp"
 #include "./router.hpp"
 #include "device/device.hpp"
+#include "duostra/device_state.hpp"
 
 namespace qsyn::duostra {
 
 class BaseScheduler {
 public:
-    using DeviceState = qsyn::device::DeviceState;
+    using DeviceState = qsyn::duostra::DeviceState;
     BaseScheduler(CircuitTopology topo, bool tqdm)
         : _circuit_topology(std::move(topo)), _tqdm(tqdm) {}
     virtual ~BaseScheduler() = default;

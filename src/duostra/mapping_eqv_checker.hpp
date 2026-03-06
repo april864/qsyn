@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <unordered_set>
 
-#include "device/device.hpp"
+#include "duostra/device_state.hpp"
 #include "duostra/duostra.hpp"
 #include "qsyn/qsyn_type.hpp"
 
@@ -28,7 +28,7 @@ namespace duostra {
 
 class MappingEquivalenceChecker {
 public:
-    using DeviceState = qsyn::device::DeviceState;
+    using DeviceState = qsyn::duostra::DeviceState;
     MappingEquivalenceChecker(qcir::QCir* phy, qcir::QCir* log, DeviceState dev, PlacerType placer_type, std::vector<QubitIdType> init = {}, bool reverse = false);
 
     bool check();
