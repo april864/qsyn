@@ -16,8 +16,8 @@ namespace qsyn::hamiltonian {
 using PauliTermsSorter = std::function<void(QubitHamiltonian& hamilt)>;
 
 /*
-* Lexicographic sort
-*/
+ * Lexicographic sort
+ */
 void lexicographic_sort(
     QubitHamiltonian& hamilt,
     std::span<qsyn::tableau::Pauli const, 4> order);
@@ -31,8 +31,8 @@ bool is_valid_pauli_letter_order(std::string_view order_str);
 void lexicographic_sort(QubitHamiltonian& hamilt);
 
 /*
-* Magnitude sort
-*/
+ * Magnitude sort
+ */
 void magnitude_sort(QubitHamiltonian& hamilt);
 
 }  // namespace qsyn::hamiltonian

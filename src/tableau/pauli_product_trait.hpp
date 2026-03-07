@@ -276,7 +276,7 @@ template <>
 struct hash<qsyn::tableau::PauliProduct> {
     size_t operator()(qsyn::tableau::PauliProduct const& p) const noexcept {
         auto const& b = p.bitset();
-        size_t h = std::hash<size_t>{}(b.size());
+        size_t h      = std::hash<size_t>{}(b.size());
         for (size_t i = 0; i < b.size(); ++i) {
             h = (h * 31) + static_cast<size_t>(b[i]);
         }

@@ -8,6 +8,7 @@
 
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
+#include "hamiltonian/tt_mappings.hpp"
 #include "tableau/pauli_rotation.hpp"
 
 namespace qsyn::hamiltonian {
@@ -41,6 +42,18 @@ public:
     ~JordanWignerMapping() override = default;
     std::vector<ComplexPauliTerm> map(
         std::size_t p, bool is_creation) const override;
+};
+
+class TernaryTreeMapping : public FermionToQubitMapping {
+public:
+    TernaryTreeMapping(std::size_t n_modes)
+        : FermionToQubitMapping(n_modes), _mapper(n_modes) {}
+    ~TernaryTreeMapping() override = default;
+
+    std::vector<ComplexPauliTerm> map(std::size_t p, bool is_creation) const override;
+
+private:
+    TTMapper _mapper;
 };
 
 QubitHamiltonian qubitize(
