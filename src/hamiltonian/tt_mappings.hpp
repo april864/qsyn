@@ -17,11 +17,6 @@ namespace qsyn::hamiltonian {
 
 using Pauli = qsyn::tableau::Pauli;
 
-// struct FermionOpPair {
-//     ComplexPauliTerm left;
-//     ComplexPauliTerm right;
-// };
-
 struct FermionOps {
     std::vector<ComplexPauliTerm> creation;
     std::vector<ComplexPauliTerm> annihilation;

@@ -72,7 +72,6 @@ public:
 
     const std::vector<TernaryLeg*>& get_legs() const { return _legs; }
     TernaryLeg* get_leg(size_t i) const { return _legs.at(i); }
-    // bool is_leg(const TernaryNode* node) { return node->is_leg();}
 
 private:
     std::unique_ptr<TernaryNode> _root;

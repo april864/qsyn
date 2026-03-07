@@ -32,7 +32,6 @@ TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits) {
     if (num_qubits < 0) {
         throw std::invalid_argument("invalid number of qubits");
     }
-    // fmt::println("Initializing tree with {} qubits", num_qubits);
 
     std::vector<TernaryNode*> nodes;
 
@@ -57,12 +56,10 @@ TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits) {
 
             nodes.push_back(child_ptr);
             _index_to_node[child_ptr->node_index] = child_ptr;
-            // fmt::println("Inserted child {}", index-1);
 
             auto edge                = std::make_unique<TernaryEdge>(parent, std::move(child), branch);
             child_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
             *edge_slot               = std::move(edge);
-            // fmt::println("Inserted edge between nodes {} and {}", parent_index, index-1);
         }
 
         parent_index++;
@@ -85,8 +82,6 @@ TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits) {
                 leg_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
                 *edge_slot             = std::move(edge);
                 _legs.push_back(leg_ptr);
-
-                // fmt::println("Inserted leg from node {}", i);
             }
         }
     }

@@ -33,9 +33,7 @@ void TTMapper::_basic_assign_qubits() {
 }
 
 /**
- * @brief Basic method of getting fermionic operators of each mode.
- *        Find the fermionic operators of a given mode j by walking down the tree
- *        beginning at qubit j and obtaining the corresponding Majorana strings.
+ * @brief Basic method of getting fermionic operators from Bonsai paper.
  */
 void TTMapper::_basic_load_pauli_strs() {
     for (TernaryLeg* leg : _tree.get_legs()) {
