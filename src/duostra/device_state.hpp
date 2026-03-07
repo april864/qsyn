@@ -15,7 +15,7 @@
 #include <ostream>
 #include <vector>
 
-#include "device/device.hpp"
+#include "device/device_analysis.hpp"
 #include "qsyn/qsyn_type.hpp"
 
 namespace qsyn::qcir {

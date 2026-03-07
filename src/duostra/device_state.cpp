@@ -18,7 +18,7 @@
 #include <tl/enumerate.hpp>
 #include <utility>
 
-#include "device/device.hpp"
+#include "device/device_analysis.hpp"
 #include "qcir/basic_gate_type.hpp"
 #include "qcir/qcir_gate.hpp"
 #include "qsyn/qsyn_type.hpp"

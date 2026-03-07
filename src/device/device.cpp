@@ -70,7 +70,7 @@ std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const 
     if (!_1q_gate_info.contains(qubit_id)) {
         return std::nullopt;
     }
-    std::string result = fmt::format("Qubit {}:\n", qubit_id);
+    std::string result = fmt::format("Qubit {} (adjacencies: [{}]):\n", qubit_id, fmt::join(get_adjacencies(qubit_id), ", "));
     for (auto const& [gate_idx, time, error] : _1q_gate_info.at(qubit_id)) {
         // NOTE (Mu-Te): I think the longest gate name is "measure" with 7
         // characters. So we use 8 characters for padding.
@@ -80,14 +80,15 @@ std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const 
 }
 
 tl::expected<std::string, TwoQubitGateInfoAccessError> Device::gate_info_string(QubitPair const& qubit_pair) const {
-    if (!_2q_gate_info.contains(qubit_pair)) {
-        return tl::unexpected(TwoQubitGateInfoAccessError::invalid_qubit_pair);
-    }
     if (!_1q_gate_info.contains(qubit_pair.first)) {
         return tl::unexpected(TwoQubitGateInfoAccessError::invalid_first_qubit_id);
     }
     if (!_1q_gate_info.contains(qubit_pair.second)) {
         return tl::unexpected(TwoQubitGateInfoAccessError::invalid_second_qubit_id);
+    }
+    // this check must come after the above two checks to avoid undefined behavior
+    if (!_2q_gate_info.contains(qubit_pair)) {
+        return tl::unexpected(TwoQubitGateInfoAccessError::invalid_qubit_pair);
     }
     std::string result = fmt::format("Adjacency ({}, {}):\n", qubit_pair.first, qubit_pair.second);
     for (auto const& [gate_idx, time, error] : _2q_gate_info.at(qubit_pair)) {

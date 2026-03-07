@@ -15,6 +15,7 @@
 
 #include "./device_mgr.hpp"
 #include "device/device.hpp"
+#include "device/device_analysis.hpp"
 #include "device/ibmq_devices.hpp"
 #include "qsyn/qsyn_type.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
@@ -45,9 +46,31 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 .help(
                     "if not specified, print basic information about the device;\n"
                     "if one ID is specified, print information about the qubit with the ID; \n"
-                    "if two IDs are specified, print information about the adjacency between the two qubits. An error will be reported if the two qubits are not adjacent.");
+                    "if two IDs are specified, print information about the adjacency between the two qubits."
+                    "An error will be reported if the two qubits are not adjacent.");
+            parser.add_argument<bool>("--centers")
+                .action(store_true)
+                .help("print the centers of the device");
+
+            parser.add_argument<std::string>("--cost-fn")
+                .constraint(choices_allow_prefix({"log_success_rate", "default"}))
+                .default_value("default")
+                .help("the cost function to use for the Floyd-Warshall algorithm");
         },
         [&device_mgr](ArgumentParser const& parser) {
+            auto const cost_fn_str = parser.get<std::string>("--cost-fn");
+            auto cost_fn           = default_floyd_warshall_cost<float>;
+            if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
+                cost_fn = log_success_rate_floyd_warshall_cost;
+            }
+
+            auto apsp = floyd_warshall<float>(*device_mgr.get(), cost_fn);
+            if (parser.parsed("--centers")) {
+                auto const centers = get_centers(apsp, *device_mgr.get());
+                fmt::println("Centers: {}", centers);
+                return CmdExecResult::done;
+            }
+
             auto const ids = parser.get<std::vector<size_t>>("ids");
             if (ids.size() == 0) {
                 fmt::println("{}", device_mgr.get()->info_string());
@@ -65,61 +88,25 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
                     switch (gate_info.error()) {
                         case TwoQubitGateInfoAccessError::invalid_first_qubit_id:
                             spdlog::error("Qubit {} does not exist", ids[0]);
-                            break;
+                            return CmdExecResult::error;
                         case TwoQubitGateInfoAccessError::invalid_second_qubit_id:
                             spdlog::error("Qubit {} does not exist", ids[1]);
-                            break;
+                            return CmdExecResult::error;
                         case TwoQubitGateInfoAccessError::invalid_qubit_pair:
-                            spdlog::error("Adjacency ({}, {}) does not exist", ids[0], ids[1]);
-                            break;
+                            fmt::println("({}, {}) is not adjacent", ids[0], ids[1]);
+                            auto const path = get_shortest_path(apsp, ids[0], ids[1]);
+                            if (path.has_value()) {
+                                fmt::println("Shortest path: [{}]", fmt::join(path.value(), ", "));
+                            } else {
+                                spdlog::error("No path found between {} and {}", ids[0], ids[1]);
+                            }
+                            return CmdExecResult::done;
                     }
-                    return CmdExecResult::error;
                 }
                 fmt::println("{}", gate_info.value());
             }
             return CmdExecResult::done;
         }};
-}
-
-dvlab::Command device_checkout_cmd(qsyn::device::DeviceMgr& device_mgr) {
-    return {"checkout",
-            [&device_mgr](ArgumentParser& parser) {
-                parser.description("checkout to Device <id> in DeviceMgr");
-
-                parser.add_argument<size_t>("id")
-                    .constraint(valid_device_id(device_mgr))
-                    .help("the ID of the device");
-            },
-            [&device_mgr](ArgumentParser const& parser) {
-                device_mgr.checkout(parser.get<size_t>("id"));
-                return CmdExecResult::done;
-            }};
-}
-
-dvlab::Command device_clear_cmd(qsyn::device::DeviceMgr& device_mgr) {
-    return {"clear",
-            [](ArgumentParser& parser) {
-                parser.description("clear DeviceMgr");
-            },
-            [&device_mgr](ArgumentParser const& /*parser*/) {
-                device_mgr.clear();
-                return CmdExecResult::done;
-            }};
-}
-
-dvlab::Command device_delete_cmd(qsyn::device::DeviceMgr& device_mgr) {
-    return {"delete",
-            [&device_mgr](ArgumentParser& parser) {
-                parser.description("remove a Device from DeviceMgr");
-
-                parser.add_argument<size_t>("id")
-                    .constraint(valid_device_id(device_mgr))
-                    .help("the ID of the device");
-            },
-            [&device_mgr](ArgumentParser const& parser) {
-                device_mgr.remove(parser.get<size_t>("id"));
-                return CmdExecResult::done;
-            }};
 }
 
 dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
@@ -251,25 +238,11 @@ dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
         }};
 }
 
-dvlab::Command
-device_list_cmd(qsyn::device::DeviceMgr& device_mgr) {
-    return {"list",
-            [](ArgumentParser& parser) {
-                parser.description("list info about Devices");
-            },
-            [&device_mgr](ArgumentParser const& /* parser */) {
-                device_mgr.print_list();
-
-                return CmdExecResult::done;
-            }};
-}
-
 dvlab::Command device_cmd(qsyn::device::DeviceMgr& device_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(device_mgr);
-    // print functions
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_list_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_print_cmd(device_mgr));
-    cmd.add_subcommand("device-cmd-group", device_checkout_cmd(device_mgr));
+    cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_checkout_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_read_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_fetch_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_delete_cmd(device_mgr));

@@ -10,6 +10,9 @@
 #include <date/date.h>
 #include <spdlog/spdlog.h>
 
+#include <array>
+#include <chrono>
+#include <ctime>
 #include <string>
 #include <string_view>
 
@@ -20,12 +23,13 @@ namespace qsyn::device {
 
 namespace {
 
+// Parse ISO8601 datetime (e.g. "2026-02-15T14:29:39-06:00" or "2026-02-15T20:29:39Z") into UTC.
 auto parse_iso8601(std::string s) -> std::chrono::sys_seconds {
     if (!s.empty() && s.back() == 'Z') {
         s.pop_back();
         s += "+0000";
     }
-
+    // date::parse %z expects offset without colon (e.g. -0600 not -06:00)
     if (s.size() >= 6 && s[s.size() - 3] == ':')
         s.erase(s.size() - 3, 1);
 
@@ -40,8 +44,33 @@ auto parse_iso8601(std::string s) -> std::chrono::sys_seconds {
     return tp;
 }
 
-auto format_iso8601(std::chrono::sys_seconds tp) -> std::string {
-    return date::format("%Y-%m-%d %H:%M:%S", tp);
+auto format_iso8601_utc(std::chrono::sys_seconds tp) -> std::string {
+    return date::format("%Y-%m-%d %H:%M:%S", tp) + " UTC";
+}
+
+// Format UTC time for display in the user's local timezone.
+auto format_iso8601_local(std::chrono::sys_seconds tp) -> std::string {
+    auto const secs = tp.time_since_epoch().count();
+    auto t          = static_cast<std::time_t>(secs);
+    if (static_cast<std::chrono::sys_seconds::rep>(t) != secs)
+        return format_iso8601_utc(tp);  // overflow, fallback to UTC
+    std::tm local{};
+
+    // try to retrieve the local time zone
+#if defined(_WIN32)
+    if (localtime_s(&local, &t) != 0)
+        return format_iso8601_utc(tp);
+#else
+    if (localtime_r(&t, &local) == nullptr)
+        return format_iso8601_utc(tp);
+#endif
+    std::array<char, 32> buf{};
+    // try to format the local time
+    // if this returns 0, it either means the local time formatting is invalid
+    // or there is no specialized printing for the time zone
+    if (std::strftime(buf.data(), buf.size(), "%Y-%m-%d %H:%M:%S", &local) == 0)
+        return format_iso8601_utc(tp);
+    return std::string{buf.data()};
 }
 
 auto find_gate_parameter(nlohmann::json const& gate, std::string const& name)
@@ -141,7 +170,7 @@ auto IBMQDevice::info_string() const -> std::string {
                               get_name(),
                               get_num_qubits());
     result += fmt::format("- Backend version: {}\n", backend_version);
-    result += fmt::format("- Last updated: {}\n", format_iso8601(last_update_time));
+    result += fmt::format("- Last updated: {}\n", format_iso8601_local(last_update_time));
     result += fmt::format("- Source: {}\n", source_str);
     result += fmt::format("- Gate set: [{}]\n", fmt::join(get_gate_set(), ", "));
 
