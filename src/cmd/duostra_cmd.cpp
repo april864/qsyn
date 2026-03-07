@@ -9,10 +9,10 @@
 #include <spdlog/spdlog.h>
 
 #include <cstddef>
-#include <gsl/util>
-#include <string>
 #include <cstdint>
+#include <gsl/util>
 #include <optional>
+#include <string>
 
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"

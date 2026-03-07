@@ -13,4 +13,4 @@ namespace qsyn::hamiltonian {
 
 dvlab::Command qbham_read_cmd(QubitHamiltonianMgr& qbham_mgr);
 
-} // namespace qsyn::hamiltonian
+}  // namespace qsyn::hamiltonian

@@ -58,6 +58,11 @@ JordanWignerMapping::map(std::size_t p, bool is_creation) const {
                                      : std::complex<double>(0, -0.5))};
 }
 
+std::vector<ComplexPauliTerm>
+TernaryTreeMapping::map(std::size_t p, bool is_creation) const {
+    return _mapper.get_pauli_str(static_cast<int>(p), is_creation);
+}
+
 QubitHamiltonian qubitize(FermionHamiltonian const& f_hamilt,
                           FermionToQubitMapping const& mapping) {
     std::size_t n_qubits = f_hamilt.n_modes();

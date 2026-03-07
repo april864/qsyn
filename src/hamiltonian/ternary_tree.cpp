@@ -4,19 +4,36 @@
   Author       [ April Wang (april864) ]
 */
 
-#include <memory>
-#include <vector>
-#include <unordered_map>
-#include <cassert>
-#include <utility>
-
 #include "ternary_tree.hpp"
+
+#include <cassert>
+#include <memory>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "qubit_hamiltonian.hpp"
 
 namespace qsyn::hamiltonian {
 
-TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits){
-    assert(num_qubits > 0);
+TernaryEdge* TernaryNode::get_edge(BranchType branch) const {
+    switch (branch) {
+        case BranchType::LEFT:
+            return left.get();
+        case BranchType::MID:
+            return mid.get();
+        case BranchType::RIGHT:
+            return right.get();
+    }
+    return nullptr;
+}
+
+TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits) {
+    if (num_qubits < 0) {
+        throw std::invalid_argument("invalid number of qubits");
+    }
+    // fmt::println("Initializing tree with {} qubits", num_qubits);
+
     std::vector<TernaryNode*> nodes;
 
     _root = std::make_unique<TernaryNode>(0);
@@ -29,63 +46,62 @@ TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits){
     while (index < num_qubits) {
         TernaryNode* parent = nodes[parent_index];
 
-        if (index < num_qubits) {
-            auto child = std::make_unique<TernaryNode>(index++, parent, BranchType::LEFT);
-            nodes.push_back(child.get());
-            _index_to_node[child->node_index] = child.get();
-            parent->left = std::move(child);
-        }
+        for (auto [branch, edge_slot] : {
+                 std::pair{BranchType::LEFT, &parent->left},
+                 std::pair{BranchType::MID, &parent->mid},
+                 std::pair{BranchType::RIGHT, &parent->right}}) {
+            if (index >= num_qubits) break;
 
-        if (index < num_qubits) {
-            auto child = std::make_unique<TernaryNode>(index++, parent, BranchType::MID);
-            nodes.push_back(child.get());
-            _index_to_node[child->node_index] = child.get();
-            parent->mid = std::move(child);
-        }
+            auto child             = std::make_unique<TernaryNode>(index++, parent);
+            TernaryNode* child_ptr = child.get();
 
-        if (index < num_qubits) {
-            auto child = std::make_unique<TernaryNode>(index++, parent, BranchType::RIGHT);
-            nodes.push_back(child.get());
-            _index_to_node[child->node_index] = child.get();
-            parent->right = std::move(child);
+            nodes.push_back(child_ptr);
+            _index_to_node[child_ptr->node_index] = child_ptr;
+            // fmt::println("Inserted child {}", index-1);
+
+            auto edge                = std::make_unique<TernaryEdge>(parent, std::move(child), branch);
+            child_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
+            *edge_slot               = std::move(edge);
+            // fmt::println("Inserted edge between nodes {} and {}", parent_index, index-1);
         }
 
         parent_index++;
     }
 
-    // // Add legs
-    // size_t num_qubit_nodes = nodes.size();
-    // for (size_t i = 0; i < num_qubit_nodes; ++i) {
-    //     TernaryNode* node = nodes[i];
-    //     if (!node->left) {
-    //         auto leg = std::make_unique<TernaryTreeLeg>(node, BranchType::LEFT);
-    //         _available_legs.push_back(std::move(leg));
-    //     }
-    //     if (!node->mid) {
-    //         auto leg = std::make_unique<TernaryTreeLeg>(node, BranchType::MID);
-    //          _available_legs.push_back(std::move(leg));
-    //     }
-    //     if (!node->right) {
-    //         auto leg = std::make_unique<TernaryTreeLeg>(node, BranchType::RIGHT);
-    //          _available_legs.push_back(std::move(leg));
-    //     }
-    // }
+    // Add legs
+    // TODO: Make into helper func or integrate into above loop?
+    size_t num_qubit_nodes = nodes.size();
+    for (size_t i = 0; i < num_qubit_nodes; ++i) {
+        TernaryNode* node = nodes[i];
+        for (auto [branch, edge_slot] : {
+                 std::pair{BranchType::LEFT, &node->left},
+                 std::pair{BranchType::MID, &node->mid},
+                 std::pair{BranchType::RIGHT, &node->right}}) {
+            if (!*edge_slot) {
+                auto leg_node       = std::make_unique<TernaryLeg>(node);
+                TernaryLeg* leg_ptr = leg_node.get();
+
+                auto edge              = std::make_unique<TernaryEdge>(node, std::move(leg_node), branch);
+                leg_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
+                *edge_slot             = std::move(edge);
+                _legs.push_back(leg_ptr);
+
+                // fmt::println("Inserted leg from node {}", i);
+            }
+        }
+    }
 }
 
 // Current invariant: qubit labels start at 0 and increment by 1 until num_qubits - 1
-// Required for _basic_load_ferm_ops() in tt_mappings.
-// TODO: fix this somehow
+// Required for _basic_load_pauli_strs() in tt_mappings.
+// TODO: fix this^ somehow
 void TernaryTree::assign_qubit(int node_index, int qubit_label) {
     {
         TernaryNode* node = _index_to_node.at(node_index);
 
-        node->qubit_label = qubit_label;
+        node->qubit_label           = qubit_label;
         _qubit_to_node[qubit_label] = node;
     }
 }
 
-TernaryNode* TernaryTree::get_node_by_qubit(int qubit_label) {
-    return _qubit_to_node.at(qubit_label);
-}
-
-} // namespace qsyn::hamiltonian
+}  // namespace qsyn::hamiltonian

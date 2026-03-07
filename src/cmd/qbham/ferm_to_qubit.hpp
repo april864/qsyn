@@ -11,6 +11,8 @@
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command qbham_ferm_to_qubit_cmd(QubitHamiltonianMgr& qbham_mgr);
+dvlab::Command qbham_jw_cmd(QubitHamiltonianMgr& qbham_mgr);
 
-} // namespace qsyn::hamiltonian
+dvlab::Command qbham_ternary_tree_cmd(QubitHamiltonianMgr& qbham_mgr);
+
+}  // namespace qsyn::hamiltonian
