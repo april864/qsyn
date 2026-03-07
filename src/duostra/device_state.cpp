@@ -134,7 +134,7 @@ void DeviceState::place(std::vector<QubitIdType> const& assignment) {
 
 void DeviceState::calculate_path() {
     if (!_apsp) {
-        _apsp = std::make_shared<device::APSPResult>(device::floyd_warshall(*_device));
+        _apsp = std::make_shared<device::APSPResult<std::size_t>>(device::floyd_warshall<std::size_t>(*_device));
     }
 }
 

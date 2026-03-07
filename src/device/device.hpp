@@ -66,7 +66,6 @@ public:
     void print_single_edge(size_t a, size_t b) const;
     TwoQubitGateInfoMap const& get_2q_gate_info_map() const { return _2q_gate_info; }
 
-    AdjacencyMap const& get_adjacency_map() const { return _adjacency_map; }
     std::vector<size_t> const& get_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id); }
     size_t get_num_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id).size(); }
     bool is_adjacency(size_t a, size_t b) const { return dvlab::contains(_adjacency_map.at(a), b); }
@@ -84,14 +83,67 @@ protected:
     AdjacencyMap _adjacency_map;
 };
 
+template <typename CostType>
 struct APSPResult {
     std::vector<std::vector<std::optional<QubitIdType>>> predecessor;
-    std::vector<std::vector<std::optional<size_t>>> distance;
+    std::vector<std::vector<std::optional<CostType>>> distance;
 };
 
 std::optional<Device> read_qsyn_device_file(std::string const& filename);
 
-APSPResult floyd_warshall(Device const& device);
+/**
+ * @brief Floyd-Warshall Algorithm. Solve All Pairs Shortest Path (APSP)
+ *
+ * @param device Physical qubit adjacency information
+ */
+template <typename CostType>
+APSPResult<CostType>
+floyd_warshall(
+    Device const& device,
+    std::function<CostType(Device::QubitPair const&, Device const&)> const& cost_fn =
+        [](Device::QubitPair const&, Device const&) -> CostType {
+        return 1;
+    }) {
+    auto const n = device.get_num_qubits();
+
+    APSPResult<CostType> result;
+    result.distance.assign(n, std::vector<std::optional<size_t>>(n, std::nullopt));
+    result.predecessor.assign(n, std::vector<std::optional<QubitIdType>>(n, std::nullopt));
+
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
+            if (i == j) {
+                result.distance[i][j]    = 0;
+                result.predecessor[i][j] = std::nullopt;
+            }
+        }
+    }
+
+    for (auto const& [adj, _] : device.get_2q_gate_info_map()) {
+        auto const& [i, j]       = adj;
+        result.distance[i][j]    = cost_fn(adj, device);
+        result.distance[j][i]    = cost_fn(adj, device);
+        result.predecessor[i][j] = i;
+        result.predecessor[j][i] = j;
+    }
+
+    for (size_t k = 0; k < n; k++) {
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < n; j++) {
+                if (!result.distance[i][k].has_value() || !result.distance[k][j].has_value()) {
+                    continue;
+                }
+                auto const through_k = result.distance[i][k].value() + result.distance[k][j].value();
+                if (!result.distance[i][j].has_value() || result.distance[i][j].value() > through_k) {
+                    result.distance[i][j]    = through_k;
+                    result.predecessor[i][j] = result.predecessor[k][j];
+                }
+            }
+        }
+    }
+
+    return result;
+}
 
 }  // namespace qsyn::device
 
