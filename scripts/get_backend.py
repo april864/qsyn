@@ -15,8 +15,7 @@ logging.getLogger("qiskit_ibm_runtime.qiskit_runtime_service").setLevel(logging.
 from qiskit_ibm_runtime import IBMBackend, QiskitRuntimeService
 import qiskit_ibm_runtime.fake_provider as fake_provider
 
-
-def get_real_backend(backend_name: str) -> IBMBackend:
+def load_service() -> QiskitRuntimeService:
     load_dotenv()  # loads .env from current dir (or parent dirs)
     token = os.getenv("IBMQ_API_KEY")
     if not token:
@@ -25,18 +24,27 @@ def get_real_backend(backend_name: str) -> IBMBackend:
     service = QiskitRuntimeService(
         token=token,
     )
+    return service
+
+def print_available_backends() -> None:
+    service = load_service()
+    print("Available backends:", file=sys.stderr)
+    for b in service.backends():
+        print(f"  {b.name}", file=sys.stderr)
+
+def get_real_backend(backend_name: str, verbose = False) -> IBMBackend:
+    service = load_service()
     try:
         backend = service.backend(backend_name)
         return backend
     except Exception:
-        print(f"Error: Failed to get backend {backend_name}.", file=sys.stderr)
-        print("Available backends:", file=sys.stderr)
-        for b in service.backends():
-            print(f"  {b.name}", file=sys.stderr)
+        if verbose:
+            print(f"Error: Failed to get backend {backend_name}.", file=sys.stderr)
+            print_available_backends(service)
         return None
 
 
-def get_fake_backend(backend_name: str) -> IBMBackend:
+def get_fake_backend(backend_name: str, verbose = False) -> IBMBackend:
     try:
         # Convert backend name to fake backend class name
         # e.g., "fake_manila" -> "FakeManilaV2" or "FakeManila"
@@ -53,8 +61,9 @@ def get_fake_backend(backend_name: str) -> IBMBackend:
             backend_class = getattr(fake_provider, backend_class_name)
             return backend_class()
     except (AttributeError, Exception) as e:
-        print(f"Error: Failed to get backend {backend_name}.")
-        print(f"Please provide a valid fake backend name (e.g., fake_manila, fake_oslo)")
-        print("\nAvailable fake backends can be found at:")
-        print("https://docs.quantum.ibm.com/api/qiskit-ibm-runtime/fake_provider")
+        if verbose:
+            print(f"Error: Failed to get backend {backend_name}.")
+            print(f"Please provide a valid fake backend name (e.g., fake_manila, fake_oslo)")
+            print("\nAvailable fake backends can be found at:")
+            print("https://docs.quantum.ibm.com/api/qiskit-ibm-runtime/fake_provider")
         return None

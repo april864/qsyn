@@ -9,7 +9,7 @@ import json
 
 from qiskit_ibm_runtime import RuntimeEncoder, IBMBackend
 
-from get_backend import get_fake_backend, get_real_backend
+from get_backend import get_fake_backend, get_real_backend, print_available_backends
 
 import os
 
@@ -55,10 +55,22 @@ def main() -> int:
     parser.add_argument(
         "-o", "--output",
         type=str,
-        required=True,
-        help='the output directory to save the backend attributes'
+        help='The output directory to save the backend attributes. Required unless --print-available-backends is specified. '
+    )
+    parser.add_argument(
+        "--print-available-backends",
+        action="store_true",
+        help='print the available backends'
     )
     args = parser.parse_args()
+    
+    if args.print_available_backends:
+        print_available_backends()
+        return 0
+    
+    if args.backend is None:
+        parser.print_help()
+        return 1
     
     # normalize the backend name
     

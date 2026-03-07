@@ -18,6 +18,7 @@
 #include "device/ibmq_devices.hpp"
 #include "qsyn/qsyn_type.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
+#include "util/spinner.hpp"
 #include "util/sysdep.hpp"
 #include "util/tmp_files.hpp"
 
@@ -204,11 +205,24 @@ dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 std::filesystem::path(home_dir.value()) /
                 ".config/qsyn/cached_backend_attrs/"));
 
-            auto const result = fetch_ibmq_device_attrs_with_fallback(
-                backend_name, fake, cached, cached_dir);
+            auto const result = dvlab::utils::with_spinner(
+                [&]() {
+                    return fetch_ibmq_device_attrs_with_fallback(
+                        backend_name, fake, cached, cached_dir);
+                },
+                "Fetching IBM backend attributes...");
 
             if (!result) {
                 spdlog::error("Failed to fetch IBM backend attributes for {}", backend_name);
+
+                if (fake) {
+                    fmt::println("Please provide a valid fake backend name (e.g., fake_manila, fake_oslo)");
+                } else {
+                    dvlab::utils::uv_run_script("scripts/get_ibm_backend_attrs.py", {backend_name, "--print-available-backends"});
+                    fmt::println("Alternatively, fetch fake backends (e.g., fake_manila, fake_oslo) by specifying the -f/--fake flag.");
+                }
+                fmt::println("Available fake backends can be found at:");
+                fmt::println("https://docs.quantum.ibm.com/api/qiskit-ibm-runtime/fake_provider");
                 return CmdExecResult::error;
             }
 
@@ -226,7 +240,12 @@ dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
                     backend_name);
             }
 
-            // TODO: parse and add the device to the device manager
+            auto device = read_ibmq_device(result.value());
+            if (!device.has_value()) {
+                spdlog::error("Failed to parse IBM backend attributes for {}", backend_name);
+                return CmdExecResult::error;
+            }
+            device_mgr.add(device_mgr.get_next_id(), std::make_unique<IBMQDevice>(std::move(device.value())));
 
             return CmdExecResult::done;
         }};

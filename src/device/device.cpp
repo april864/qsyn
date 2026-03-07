@@ -128,7 +128,7 @@ void Device::print_single_edge(size_t a, size_t b) const {
 }
 
 std::string Device::info_string() const {
-    return fmt::format("{} ({} qubits)", _name, _adjacency_map.size());
+    return fmt::format("Device: {} ({} qubits)\n- Gate set: [{}]", _name, _adjacency_map.size(), fmt::join(_gate_set, ", "));
 }
 
 std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const {
@@ -137,7 +137,9 @@ std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const 
     }
     std::string result = fmt::format("Qubit {}:\n", qubit_id);
     for (auto const& [gate_idx, time, error] : _1q_gate_info.at(qubit_id)) {
-        result += fmt::format("- {:>4}: Delay: {:>8.3} (ns)    Error: {:>8.5}\n", _gate_set[gate_idx], time.count(), error);
+        // NOTE (Mu-Te): I think the longest gate name is "measure" with 7
+        // characters. So we use 8 characters for padding.
+        result += fmt::format("- {:>8}: Delay: {:>4.3} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
     }
     return result;
 }
@@ -154,7 +156,9 @@ tl::expected<std::string, TwoQubitGateInfoAccessError> Device::gate_info_string(
     }
     std::string result = fmt::format("Adjacency ({}, {}):\n", qubit_pair.first, qubit_pair.second);
     for (auto const& [gate_idx, time, error] : _2q_gate_info.at(qubit_pair)) {
-        result += fmt::format("- {:>4}: Delay: {:>8.3} (ns)    Error: {:>8.5}\n", _gate_set[gate_idx], time.count(), error);
+        // NOTE (Mu-Te): I think the longest gate name is "measure" with 7
+        // characters. So we use 8 characters for padding.
+        result += fmt::format("- {:>8}: Delay: {:>4.3} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
     }
     return result;
 }

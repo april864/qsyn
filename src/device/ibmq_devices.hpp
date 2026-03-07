@@ -29,14 +29,17 @@ struct IBMQDeviceJsons {
     nlohmann::json properties_json;
 };
 
-class IBMQDevice : public Device {
-    // No specialization for now. That said, we would probably
-    // want to add some IBMQ-specific fields here in the future
+struct IBMQDevice : public Device {
+    std::string backend_version;
+    std::chrono::sys_seconds last_update_time;
+    IBMQDeviceJsonsSource json_source;
+
+    std::string info_string() const override;
 };
 
 auto read_ibmq_device(IBMQDeviceJsons const& jsons) -> std::optional<IBMQDevice>;
 
-auto read_ibmq_devices_jsons(std::filesystem::path const& device_path,
+auto load_ibmq_devices_jsons(std::filesystem::path const& device_path,
                              std::filesystem::path const& properties_path,
                              IBMQDeviceJsonsSource source = IBMQDeviceJsonsSource::unknown)
     -> std::optional<IBMQDeviceJsons>;
