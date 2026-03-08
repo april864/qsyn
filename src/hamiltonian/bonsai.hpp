@@ -7,6 +7,7 @@
 #pragma once
 
 #include <limits>
+#include <tl/expected.hpp>
 
 #include "device/device.hpp"
 #include "device/device_analysis.hpp"
@@ -14,8 +15,13 @@
 
 namespace qsyn::hamiltonian {
 
-std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
+enum class BonsaiFailReason : uint8_t {
+    not_enough_qubits,
+    invalid_root_qubit,
+};
 
-std::optional<TernaryTree> build_bonsai_ternary_tree(device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
+tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(std::size_t root_qubit_id, device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
+
+tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
 
 }  // namespace qsyn::hamiltonian

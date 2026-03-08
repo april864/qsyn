@@ -33,10 +33,21 @@ APSPResult floyd_warshall(
 
 std::vector<float> get_eccentricities(APSPResult const& apsp, Device const& device);
 
-std::vector<QubitIdType> get_centers(std::vector<float> const& eccentricities);
+std::vector<QubitIdType>
+get_centers(
+    std::vector<float> const& eccentricities,
+    std::function<bool(QubitIdType const&)> const& filter_fn =
+        [](QubitIdType const& /*qubit_id*/) { return true; });
 
-std::vector<QubitIdType> get_centers(APSPResult const& apsp, Device const& device);
+std::vector<QubitIdType>
+get_centers(
+    APSPResult const& apsp,
+    Device const& device,
+    std::function<bool(QubitIdType const&)> const& filter_fn =
+        [](QubitIdType const& /*qubit_id*/) { return true; });
 
 std::optional<std::vector<QubitIdType>> get_shortest_path(APSPResult const& apsp, QubitIdType src, QubitIdType dest);
+
+std::vector<std::vector<QubitIdType>> get_connected_components(APSPResult const& apsp, Device const& device);
 
 }  // namespace qsyn::device

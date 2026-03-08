@@ -53,7 +53,9 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
             parser.add_argument<bool>("--centers")
                 .action(store_true)
                 .help("print the centers of the device");
-
+            parser.add_argument<bool>("--connected-components")
+                .action(store_true)
+                .help("print the connected components of the device");
             parser.add_argument<std::string>("--cost-fn")
                 .constraint(choices_allow_prefix({"log_success_rate", "default"}))
                 .default_value("default")
@@ -68,8 +70,27 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
 
             auto apsp = floyd_warshall(*device_mgr.get(), cost_fn);
             if (parser.parsed("--centers")) {
-                auto const centers = get_centers(apsp, *device_mgr.get());
-                fmt::println("Centers: {}", centers);
+                auto const& device              = *device_mgr.get();
+                auto const connected_components = get_connected_components(apsp, device);
+                auto const eccentricities       = get_eccentricities(apsp, device);
+                for (size_t c = 0; c < connected_components.size(); ++c) {
+                    auto const& component = connected_components[c];
+                    auto radius           = std::numeric_limits<float>::infinity();
+                    for (auto q : component) radius = std::min(radius, eccentricities[q]);
+                    std::vector<QubitIdType> centers;
+                    for (auto q : component) {
+                        if (eccentricities[q] == radius) centers.push_back(q);
+                    }
+                    fmt::println("Component {} (size {}): centers = {}", c, component.size(), centers);
+                }
+                return CmdExecResult::done;
+            }
+
+            if (parser.parsed("--connected-components")) {
+                auto const connected_components = get_connected_components(apsp, *device_mgr.get());
+                for (auto const& component : connected_components) {
+                    fmt::println("Component (size {}): [{}]", component.size(), fmt::join(component, ", "));
+                }
                 return CmdExecResult::done;
             }
 
@@ -182,7 +203,15 @@ dvlab::Command device_bonsai_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 }
             }();
             if (!tree.has_value()) {
-                spdlog::error("Failed to build Bonsai ternary tree");
+                switch (tree.error()) {
+                    case qsyn::hamiltonian::BonsaiFailReason::not_enough_qubits:
+                        spdlog::error("Failed to build Bonsai ternary tree: not enough qubits in the device");
+                        spdlog::error("(Potentially disconnected device?)");
+                        return CmdExecResult::error;
+                    case qsyn::hamiltonian::BonsaiFailReason::invalid_root_qubit:
+                        spdlog::error("Failed to build Bonsai ternary tree: invalid root qubit");
+                        return CmdExecResult::error;
+                }
                 return CmdExecResult::error;
             }
             fmt::println("{}", qsyn::hamiltonian::to_string(tree.value()));

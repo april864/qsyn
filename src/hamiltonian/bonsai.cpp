@@ -12,6 +12,7 @@
 
 #include "device/device_analysis.hpp"
 #include "spdlog/spdlog.h"
+#include "util/util.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -48,12 +49,11 @@ using PQ = std::priority_queue<PQItem, std::vector<PQItem>, decltype(comp)>;
  * @param apsp APSP result. The caller should compute the APSP result before calling this function.
  * @param n_qubits Number of qubits in the final Bonsai tree. If not specified,
  *        a tree with all qubits in the device will be built.
- * @return Bonsai ternary tree
+ * @return Bonsai ternary tree, or a failure reason.
  */
-std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, device::Device const& device, device::APSPResult const& apsp, size_t n_qubits) {
+tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(std::size_t root_qubit_id, device::Device const& device, device::APSPResult const& apsp, size_t n_qubits) {
     if (root_qubit_id >= device.get_num_qubits()) {
-        spdlog::error("Bonsai: Root qubit ID {} is out of range", root_qubit_id);
-        return std::nullopt;
+        return tl::unexpected(BonsaiFailReason::invalid_root_qubit);
     }
 
     n_qubits = std::min(n_qubits, device.get_num_qubits());
@@ -86,8 +86,7 @@ std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, 
 
     while (tt.num_qubits() < n_qubits) {
         if (qubit_queue.empty()) {
-            spdlog::error("Bonsai: Cannot find more qubits to add to the tree (possibly disconnected device?)");
-            return std::nullopt;
+            return tl::unexpected(BonsaiFailReason::not_enough_qubits);
         }
         auto const [dist_to_center, dist, qubit, parent_qubit] = qubit_queue.top();
         qubit_queue.pop();
@@ -133,14 +132,28 @@ std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, 
  * @param apsp APSP result. The caller should compute the APSP result before calling this function.
  * @param n_qubits Number of qubits in the final Bonsai tree. If not specified,
  *        a tree with all qubits in the device will be built.
- * @return Bonsai ternary tree
+ * @return Bonsai ternary tree, or a failure reason.
  */
-std::optional<TernaryTree> build_bonsai_ternary_tree(device::Device const& device, device::APSPResult const& apsp, size_t n_qubits) {
-    auto const centers = device::get_centers(apsp, device);
-    if (centers.empty()) {
-        spdlog::error("Bonsai: No centers found in the device coupling graph");
-        return std::nullopt;
+tl::expected<TernaryTree, BonsaiFailReason>
+build_bonsai_ternary_tree(
+    device::Device const& device, device::APSPResult const& apsp, size_t n_qubits) {
+    n_qubits                        = std::min(n_qubits, device.get_num_qubits());
+    auto const connected_components = device::get_connected_components(apsp, device);
+    assert(!connected_components.empty());
+    for (auto const& component : connected_components) {
+        // REVIEW: potential query speed concern
+        auto const centers = device::get_centers(
+            apsp, device, [&](QubitIdType const& qubit_id) {
+                return dvlab::contains(component, qubit_id);
+            });
+        assert(!centers.empty());
+        auto const component_size = component.size();
+        // for now, we ignore the case where there are multiple centers in the same component
+        auto result = build_bonsai_ternary_tree(centers[0], device, apsp, n_qubits);
+        if (result.has_value()) {
+            return result;
+        }
     }
-    return build_bonsai_ternary_tree(centers[0], device, apsp, n_qubits);
+    return tl::unexpected(BonsaiFailReason::not_enough_qubits);
 }
 }  // namespace qsyn::hamiltonian
