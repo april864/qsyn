@@ -19,9 +19,8 @@ float default_floyd_warshall_cost(Device::QubitPair const& /*adj*/, Device const
 
 /**
  * @brief Additive cost function for Floyd-Warshall algorithm.
- *        Cost is -log(1 - error) for the first gate info of the adjacency.
- *        Uses a minimum cost so that perfect gates (error 0) still distinguish
- *        path length; clamps to avoid log(0) or log(negative).
+ *        Cost is -log2(1 - error) for the first gate info of the adjacency.
+ *        Returns infinity when error >= 1 (broken/unusable coupling).
  * @param adj Adjacency pair
  * @param device Device
  * @return Cost
@@ -61,7 +60,7 @@ APSPResult floyd_warshall(
         auto const& [i, j] = adj;
         // if the error rate is 1, the cost should be infinity
         // regardless of the cost function. Even for noise-agnostic qubit
-        // mappings, allowing using these couplings are just too ridiculous.
+        // mappings, allowing using these couplings is just too ridiculous.
         auto const cost = (device.get_2q_gate_info_map().at(adj)[0].error == 1.f)
                               ? std::numeric_limits<float>::infinity()
                               : cost_fn(adj, device);
