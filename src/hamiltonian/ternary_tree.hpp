@@ -6,45 +6,48 @@
 
 #pragma once
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
-#include "qubit_hamiltonian.hpp"
+#include "qsyn/qsyn_type.hpp"
 
 namespace qsyn::hamiltonian {
 
-enum class BranchType {
-    LEFT,
-    MID,
-    RIGHT,
-    ROOT
+enum class BranchType : uint8_t {
+    left  = 0,
+    mid   = 1,
+    right = 2,
 };
 
 struct TernaryEdge;
 
 struct TernaryNode {
-    int node_index;
-    int qubit_label = -1;
+    std::optional<QubitIdType> qubit_label{std::nullopt};
 
     TernaryNode* parent;
 
-    std::unique_ptr<TernaryEdge> left, mid, right;
+    std::array<std::unique_ptr<TernaryEdge>, 3> edges;
     TernaryEdge* incoming_edge;
 
-    TernaryNode(int index, TernaryNode* p = nullptr, TernaryEdge* e = nullptr)
-        : node_index(index), parent(p), incoming_edge(e) {}
+    TernaryNode(TernaryNode* p = nullptr, TernaryEdge* e = nullptr)
+        : parent(p), incoming_edge(e) {}
 
     virtual ~TernaryNode() = default;
     virtual bool is_leg() const { return false; }
 
     TernaryEdge* get_edge(BranchType branch) const;
+    TernaryEdge* get_left() const { return get_edge(BranchType::left); }
+    TernaryEdge* get_mid() const { return get_edge(BranchType::mid); }
+    TernaryEdge* get_right() const { return get_edge(BranchType::right); }
+    void set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edge);
 };
 
 struct TernaryLeg : public TernaryNode {
     TernaryLeg(TernaryNode* p = nullptr, TernaryEdge* e = nullptr)
-        : TernaryNode(-1, p, e) {}
+        : TernaryNode(p, e) {}
 
     bool is_leg() const override { return true; }
 };
@@ -58,26 +61,48 @@ struct TernaryEdge {
         : source(s), target(std::move(t)), branch(b) {}
 };
 
-class TernaryTree {
+class TernaryTree {  // NOLINT(hicpp-special-member-functions, cppcoreguidelines-special-member-functions) : copy-swap idiom
 public:
-    int const num_qubits;
+    TernaryTree();
+    TernaryTree(size_t num_qubits);
 
-    TernaryTree(int num_qubits);
-    void assign_qubit(int node_index, int qubit_label);
+    TernaryTree(TernaryTree const& other);
+    TernaryTree(TernaryTree&& other) noexcept = default;
+
+    TernaryTree& operator=(TernaryTree copy) {
+        copy.swap(*this);
+        return *this;
+    }
+
+    void swap(TernaryTree& other) noexcept;
+    friend void swap(TernaryTree& a, TernaryTree& b) noexcept;
+
+    void assign_qubit(size_t node_index, QubitIdType qubit_label);
 
     TernaryNode* get_root() const { return _root.get(); }
 
-    TernaryNode* get_node_by_qubit(int qubit_label) const { return _qubit_to_node.at(qubit_label); }
-    TernaryNode* get_node_by_index(int node_index) const { return _index_to_node.at(node_index); }
+    TernaryNode* get_node_by_qubit(QubitIdType qubit_label) const { return _qubit_to_node.at(qubit_label); }
+    TernaryNode* get_node_by_index(size_t node_index) const { return _index_to_node.at(node_index); }
 
     const std::vector<TernaryLeg*>& get_legs() const { return _legs; }
     TernaryLeg* get_leg(size_t i) const { return _legs.at(i); }
 
+    size_t num_qubits() const { return _num_qubits; }
+
+    size_t add_qubit_node(TernaryNode* parent, BranchType branch);
+    std::optional<size_t> add_qubit_node_to_first_empty_branch(TernaryNode* parent);
+    size_t add_leg_node(TernaryNode* parent, BranchType branch);
+
+    void append_legs_to_tree();
+
 private:
     std::unique_ptr<TernaryNode> _root;
-    std::unordered_map<int, TernaryNode*> _index_to_node;
-    std::unordered_map<int, TernaryNode*> _qubit_to_node;
+    std::unordered_map<size_t, TernaryNode*> _index_to_node;
+    std::unordered_map<QubitIdType, TernaryNode*> _qubit_to_node;
     std::vector<TernaryLeg*> _legs;
+    size_t _num_qubits;
 };
+
+std::string to_string(TernaryTree const& tree);
 
 }  // namespace qsyn::hamiltonian

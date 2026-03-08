@@ -91,7 +91,7 @@ public:
 private:
     std::shared_ptr<device::Device> _device;
     PhysicalQubitList _qubit_list;
-    std::shared_ptr<device::APSPResult<std::size_t>> _apsp;
+    std::shared_ptr<device::APSPResult> _apsp;
 };
 
 }  // namespace qsyn::duostra

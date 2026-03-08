@@ -385,7 +385,8 @@ target_link_libraries_system(
     PRIVATE
     fmt::fmt
     spdlog::spdlog
-    Microsoft.GSL::GSL)
+    Microsoft.GSL::GSL
+    sul::dynamic_bitset)
 
 target_compile_options(
     ${UNIT_TEST_NAME}

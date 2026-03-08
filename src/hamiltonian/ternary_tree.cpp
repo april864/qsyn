@@ -12,91 +12,237 @@
 #include <utility>
 #include <vector>
 
-#include "qubit_hamiltonian.hpp"
+#include "fmt/format.h"
 
 namespace qsyn::hamiltonian {
 
 TernaryEdge* TernaryNode::get_edge(BranchType branch) const {
-    switch (branch) {
-        case BranchType::LEFT:
-            return left.get();
-        case BranchType::MID:
-            return mid.get();
-        case BranchType::RIGHT:
-            return right.get();
-    }
-    return nullptr;
+    auto edge_id = static_cast<std::underlying_type_t<BranchType>>(branch);
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+    return edges[edge_id].get();
 }
 
-TernaryTree::TernaryTree(int num_qubits) : num_qubits(num_qubits) {
-    if (num_qubits < 0) {
-        throw std::invalid_argument("invalid number of qubits");
+void TernaryNode::set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edge) {
+    auto edge_id = static_cast<std::underlying_type_t<BranchType>>(branch);
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+    edges[edge_id] = std::move(edge);
+}
+
+TernaryTree::TernaryTree() : _num_qubits(1) {
+    _root             = std::make_unique<TernaryNode>();
+    _index_to_node[0] = _root.get();
+}
+
+TernaryTree::TernaryTree(size_t num_qubits) {
+    if (num_qubits == 0) {
+        throw std::invalid_argument("A ternary tree must have at least one node (root)");
     }
 
-    std::vector<TernaryNode*> nodes;
-
-    _root = std::make_unique<TernaryNode>(0);
-    nodes.push_back(_root.get());
+    _root             = std::make_unique<TernaryNode>();
     _index_to_node[0] = _root.get();
 
-    int index = 1;
+    _num_qubits = 1;
 
-    int parent_index = 0;
-    while (index < num_qubits) {
-        TernaryNode* parent = nodes[parent_index];
+    size_t parent_index = 0;
+    while (_num_qubits < num_qubits) {
+        TernaryNode* parent = get_node_by_index(parent_index);
 
-        for (auto [branch, edge_slot] : {
-                 std::pair{BranchType::LEFT, &parent->left},
-                 std::pair{BranchType::MID, &parent->mid},
-                 std::pair{BranchType::RIGHT, &parent->right}}) {
-            if (index >= num_qubits) break;
-
-            auto child             = std::make_unique<TernaryNode>(index++, parent);
-            TernaryNode* child_ptr = child.get();
-
-            nodes.push_back(child_ptr);
-            _index_to_node[child_ptr->node_index] = child_ptr;
-
-            auto edge                = std::make_unique<TernaryEdge>(parent, std::move(child), branch);
-            child_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
-            *edge_slot               = std::move(edge);
+        for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
+            if (_num_qubits >= num_qubits) break;
+            add_qubit_node(parent, branch);
         }
 
         parent_index++;
     }
 
-    // Add legs
-    // TODO: Make into helper func or integrate into above loop?
-    size_t num_qubit_nodes = nodes.size();
-    for (size_t i = 0; i < num_qubit_nodes; ++i) {
-        TernaryNode* node = nodes[i];
-        for (auto [branch, edge_slot] : {
-                 std::pair{BranchType::LEFT, &node->left},
-                 std::pair{BranchType::MID, &node->mid},
-                 std::pair{BranchType::RIGHT, &node->right}}) {
-            if (!*edge_slot) {
-                auto leg_node       = std::make_unique<TernaryLeg>(node);
-                TernaryLeg* leg_ptr = leg_node.get();
+    assert(_num_qubits == num_qubits);
 
-                auto edge              = std::make_unique<TernaryEdge>(node, std::move(leg_node), branch);
-                leg_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
-                *edge_slot             = std::move(edge);
-                _legs.push_back(leg_ptr);
-            }
+    append_legs_to_tree();
+}
+
+namespace {
+
+std::unique_ptr<TernaryNode> clone_node(
+    TernaryNode* old_node, TernaryNode* new_parent,
+    std::unordered_map<TernaryNode const*, TernaryNode*>& old_to_new) {
+    std::unique_ptr<TernaryNode> new_node;
+    if (old_node->is_leg()) {
+        new_node = std::make_unique<TernaryLeg>(new_parent, nullptr);
+    } else {
+        new_node              = std::make_unique<TernaryNode>(new_parent, nullptr);
+        new_node->qubit_label = old_node->qubit_label;
+    }
+    TernaryNode* new_node_ptr = new_node.get();
+    old_to_new[old_node]      = new_node_ptr;
+
+    for (int b = 0; b < 3; ++b) {
+        auto const branch     = static_cast<BranchType>(b);
+        TernaryEdge* old_edge = old_node->get_edge(branch);
+        if (old_edge && old_edge->target) {
+            auto new_target =
+                clone_node(old_edge->target.get(), new_node_ptr, old_to_new);
+            auto new_edge =
+                std::make_unique<TernaryEdge>(new_node_ptr, std::move(new_target), branch);
+            new_edge->target->incoming_edge = new_edge.get();
+            new_node_ptr->set_edge(branch, std::move(new_edge));
         }
+    }
+    return new_node;
+}
+
+}  // namespace
+
+TernaryTree::TernaryTree(TernaryTree const& other) : _num_qubits(other._num_qubits) {
+    if (!other._root) {
+        _root             = std::make_unique<TernaryNode>();
+        _index_to_node[0] = _root.get();
+        _num_qubits       = 1;
+        return;
+    }
+    std::unordered_map<TernaryNode const*, TernaryNode*> old_to_new;
+    _root = clone_node(other._root.get(), nullptr, old_to_new);
+
+    for (auto const& [index, old_node] : other._index_to_node) {
+        _index_to_node[index] = old_to_new.at(old_node);
+    }
+    for (auto const& [qubit, old_node] : other._qubit_to_node) {
+        _qubit_to_node[qubit] = old_to_new.at(old_node);
+    }
+    _legs.reserve(other._legs.size());
+    for (TernaryLeg* old_leg : other._legs) {
+        _legs.push_back(dynamic_cast<TernaryLeg*>(old_to_new.at(old_leg)));
     }
 }
 
 // Current invariant: qubit labels start at 0 and increment by 1 until num_qubits - 1
 // Required for _basic_load_pauli_strs() in tt_mappings.
 // TODO: fix this^ somehow
-void TernaryTree::assign_qubit(int node_index, int qubit_label) {
-    {
-        TernaryNode* node = _index_to_node.at(node_index);
+void TernaryTree::assign_qubit(size_t node_index, QubitIdType qubit_label) {
+    TernaryNode* node = _index_to_node.at(node_index);
 
-        node->qubit_label           = qubit_label;
-        _qubit_to_node[qubit_label] = node;
+    node->qubit_label           = qubit_label;
+    _qubit_to_node[qubit_label] = node;
+}
+
+size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
+    if (parent->get_edge(branch)) {
+        throw std::runtime_error("Branch already has a node");
+    }
+
+    auto const node_index      = _num_qubits++;
+    auto child                 = std::make_unique<TernaryNode>(parent);
+    TernaryNode* child_ptr     = child.get();
+    _index_to_node[node_index] = child_ptr;
+
+    auto edge                = std::make_unique<TernaryEdge>(parent, std::move(child), branch);
+    child_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
+    parent->set_edge(branch, std::move(edge));
+    return node_index;
+}
+
+/**
+ * @brief Add a qubit node to the first empty branch of the parent.
+ * @param parent Parent node
+ * @return Index of the added qubit node, or std::nullopt if no empty branch is found
+ */
+std::optional<size_t> TernaryTree::add_qubit_node_to_first_empty_branch(TernaryNode* parent) {
+    for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
+        if (!parent->get_edge(branch)) {
+            return std::make_optional(add_qubit_node(parent, branch));
+        }
+    }
+    return std::nullopt;
+}
+
+size_t TernaryTree::add_leg_node(TernaryNode* parent, BranchType branch) {
+    if (parent->get_edge(branch)) {
+        throw std::runtime_error("Branch already has a node");
+    }
+
+    auto child               = std::make_unique<TernaryLeg>(parent);
+    TernaryLeg* child_ptr    = child.get();
+    auto edge                = std::make_unique<TernaryEdge>(parent, std::move(child), branch);
+    child_ptr->incoming_edge = static_cast<TernaryEdge*>(edge.get());
+    parent->set_edge(branch, std::move(edge));
+    _legs.push_back(child_ptr);
+    return _legs.size() - 1;
+}
+
+/**
+ * @brief Append legs all qubit nodes in the tree.
+ *        Call this function after adding all qubit nodes to the tree.
+ */
+void TernaryTree::append_legs_to_tree() {
+    for (size_t i = 0; i < _num_qubits; ++i) {
+        TernaryNode* node = get_node_by_index(i);
+        for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
+            if (!node->get_edge(branch)) {
+                add_leg_node(node, branch);
+            }
+        }
     }
 }
 
+namespace {
+
+void append_node_hierarchy(TernaryNode* node, std::string const& prefix,
+                           bool is_last, std::string& out) {
+    auto const branch_char = is_last ? "└── " : "├── ";
+    out += prefix + branch_char;
+
+    if (node->is_leg()) {
+        out += "(leg)\n";
+        return;
+    }
+    if (node->qubit_label.has_value()) {
+        out += fmt::format("q{}\n", *node->qubit_label);
+    } else {
+        out += "(unassigned)\n";
+    }
+
+    std::array<TernaryNode*, 3> children = {nullptr, nullptr, nullptr};
+    size_t n                             = 0;
+    for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
+        TernaryEdge* e = node->get_edge(branch);
+        if (e && e->target) {
+            children.at(n) = e->target.get();
+            n++;
+        }
+    }
+
+    std::string child_prefix = prefix + (is_last ? "    " : "│   ");
+    for (size_t i = 0; i < n; ++i) {
+        append_node_hierarchy(children.at(i), child_prefix, i == n - 1, out);
+    }
+}
+
+}  // namespace
+
+std::string to_string(TernaryTree const& tree) {
+    std::string out;
+    TernaryNode* root = tree.get_root();
+    if (!root) {
+        return "(empty tree)";
+    }
+    if (root->qubit_label.has_value()) {
+        out += fmt::format("q{}\n", root->qubit_label.value());
+    } else {
+        out += "(unassigned)\n";
+    }
+    std::array<TernaryNode*, 3> children = {nullptr, nullptr, nullptr};
+    size_t n                             = 0;
+    for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
+        TernaryEdge* e = root->get_edge(branch);
+        if (e && e->target) {
+            children.at(n++) = e->target.get();
+        }
+    }
+    std::string child_prefix = "";
+    for (size_t i = 0; i < n; ++i) {
+        append_node_hierarchy(children.at(i), child_prefix, i == n - 1, out);
+    }
+    return out;
+}
 }  // namespace qsyn::hamiltonian

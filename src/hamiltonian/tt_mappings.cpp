@@ -17,17 +17,17 @@ namespace qsyn::hamiltonian {
 
 using Pauli = qsyn::tableau::Pauli;
 
-std::unordered_map<BranchType, Pauli> simple_branch_assignment = {
-    {BranchType::LEFT, Pauli::x},
-    {BranchType::MID, Pauli::y},
-    {BranchType::RIGHT, Pauli::z}};
+std::unordered_map<BranchType, Pauli> const simple_branch_assignment = {
+    {BranchType::left, Pauli::x},
+    {BranchType::mid, Pauli::y},
+    {BranchType::right, Pauli::z}};
 
 /**
  * @brief Basic method of assigning qubits to nodes.
  *        Assigns qubit i to node i.
  */
 void TTMapper::_basic_assign_qubits() {
-    for (int i = 0; i < _tree.num_qubits; i++) {
+    for (size_t i = 0; i < _tree.num_qubits(); i++) {
         _tree.assign_qubit(i, i);
     }
 }
@@ -37,14 +37,14 @@ void TTMapper::_basic_assign_qubits() {
  */
 void TTMapper::_basic_load_pauli_strs() {
     for (TernaryLeg* leg : _tree.get_legs()) {
-        std::vector<Pauli> pauli_str(_tree.num_qubits, Pauli::i);
+        std::vector<Pauli> pauli_str(_tree.num_qubits(), Pauli::i);
 
         TernaryNode* curr = leg;
         while (curr->incoming_edge) {
             TernaryEdge* edge   = curr->incoming_edge;
             TernaryNode* parent = edge->source;
 
-            pauli_str[parent->qubit_label] = simple_branch_assignment.at(edge->branch);
+            pauli_str[parent->qubit_label.value()] = simple_branch_assignment.at(edge->branch);
 
             curr = parent;
         }
@@ -54,30 +54,32 @@ void TTMapper::_basic_load_pauli_strs() {
 }
 
 void TTMapper::_pair_legs() {
-    for (int i = 0; i < _tree.num_qubits; i++) {
+    for (size_t i = 0; i < _tree.num_qubits(); i++) {
         TernaryNode* curr = _tree.get_node_by_index(i);
 
-        TernaryNode* left_path = curr->left.get()->target.get();
+        TernaryNode* left_path = curr->get_left()->target.get();
         while (!left_path->is_leg()) {
-            left_path = left_path->right.get()->target.get();
+            left_path = left_path->get_right()->target.get();
         }
 
-        TernaryNode* right_path = curr->mid.get()->target.get();
+        TernaryNode* right_path = curr->get_mid()->target.get();
         while (!right_path->is_leg()) {
-            right_path = right_path->right.get()->target.get();
+            right_path = right_path->get_right()->target.get();
         }
 
         assert(left_path && left_path->is_leg());
         assert(right_path && right_path->is_leg());
 
-        auto left_leg  = static_cast<TernaryLeg*>(left_path);
-        auto right_leg = static_cast<TernaryLeg*>(right_path);
+        auto left_leg  = dynamic_cast<TernaryLeg*>(left_path);
+        auto right_leg = dynamic_cast<TernaryLeg*>(right_path);
+        DVLAB_ASSERT(left_leg, "left_path is not a leg");
+        DVLAB_ASSERT(right_path, "right_path is not a leg");
         _leg_pairs.emplace(i, std::pair{left_leg, right_leg});
     }
 }
 
 void TTMapper::_load_ferm_ops() {
-    for (int i = 0; i < _tree.num_qubits; ++i) {
+    for (size_t i = 0; i < _tree.num_qubits(); ++i) {
         auto left_str  = _pauli_strs.at(_leg_pairs.at(i).first);
         auto right_str = _pauli_strs.at(_leg_pairs.at(i).second);
 

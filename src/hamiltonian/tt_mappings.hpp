@@ -22,6 +22,10 @@ struct FermionOps {
     std::vector<ComplexPauliTerm> annihilation;
 };
 
+/**
+ * @brief Mapper for Ternary Tree fermionic operators to qubit operators.
+ * @param num_qubits The number of qubits in the Ternary Tree.
+ */
 class TTMapper {
 public:
     TTMapper(int num_qubits)
@@ -32,15 +36,15 @@ public:
         _load_ferm_ops();
     }
 
-    std::vector<ComplexPauliTerm> get_pauli_str(int mode, bool is_creation) const {
+    std::vector<ComplexPauliTerm> get_pauli_str(size_t mode, bool is_creation) const {
         return is_creation ? _mode_to_ferm_ops.at(mode).creation : _mode_to_ferm_ops.at(mode).annihilation;
     }
 
 private:
     TernaryTree _tree;
     std::unordered_map<TernaryLeg*, std::vector<Pauli>> _pauli_strs;
-    std::unordered_map<int, std::pair<TernaryLeg*, TernaryLeg*>> _leg_pairs;
-    std::unordered_map<int, FermionOps> _mode_to_ferm_ops;
+    std::unordered_map<size_t, std::pair<TernaryLeg*, TernaryLeg*>> _leg_pairs;
+    std::unordered_map<size_t, FermionOps> _mode_to_ferm_ops;
 
     void _basic_assign_qubits();
     void _basic_load_pauli_strs();

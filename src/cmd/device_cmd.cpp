@@ -17,6 +17,8 @@
 #include "device/device.hpp"
 #include "device/device_analysis.hpp"
 #include "device/ibmq_devices.hpp"
+#include "hamiltonian/bonsai.hpp"
+#include "hamiltonian/ternary_tree.hpp"
 #include "qsyn/qsyn_type.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 #include "util/spinner.hpp"
@@ -59,12 +61,12 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
         },
         [&device_mgr](ArgumentParser const& parser) {
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
-            auto cost_fn           = default_floyd_warshall_cost<float>;
+            auto cost_fn           = default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = log_success_rate_floyd_warshall_cost;
             }
 
-            auto apsp = floyd_warshall<float>(*device_mgr.get(), cost_fn);
+            auto apsp = floyd_warshall(*device_mgr.get(), cost_fn);
             if (parser.parsed("--centers")) {
                 auto const centers = get_centers(apsp, *device_mgr.get());
                 fmt::println("Centers: {}", centers);
@@ -140,6 +142,52 @@ dvlab::Command device_read_cmd(qsyn::device::DeviceMgr& device_mgr) {
 
                 return CmdExecResult::done;
             }};
+}
+
+dvlab::Command device_bonsai_cmd(qsyn::device::DeviceMgr& device_mgr) {
+    return {
+        "bonsai",
+        [](ArgumentParser& parser) {
+            parser.description("build and print a Bonsai ternary tree for the current device");
+            parser.add_argument<size_t>("-n", "--n-qubits")
+                .default_value(std::numeric_limits<size_t>::max())
+                .help("number of qubits in the Bonsai tree. If not specified, all qubits in the device will be used.");
+            parser.add_argument<size_t>("-r", "--root-qubit-id")
+                .help("ID of the qubit to root the tree at. If not specified, a center of the device coupling graph will be the root.");
+            parser.add_argument<std::string>("--cost-fn")
+                .constraint(choices_allow_prefix({"log_success_rate", "default"}))
+                .default_value("default")
+                .help("cost function for Floyd-Warshall (used to pick tree center and order)");
+        },
+        [&device_mgr](ArgumentParser const& parser) {
+            if (device_mgr.empty()) {
+                spdlog::error("No device loaded. Read or fetch a device first.");
+                return CmdExecResult::error;
+            }
+            auto const n_qubits    = parser.get<size_t>("--n-qubits");
+            auto const cost_fn_str = parser.get<std::string>("--cost-fn");
+            auto cost_fn           = default_floyd_warshall_cost;
+            if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
+                cost_fn = log_success_rate_floyd_warshall_cost;
+            }
+            auto const apsp = floyd_warshall(*device_mgr.get(), cost_fn);
+            auto tree       = [&]() {
+                if (parser.parsed("--root-qubit-id")) {
+                    auto const root_qubit_id = parser.get<size_t>("--root-qubit-id");
+                    return qsyn::hamiltonian::build_bonsai_ternary_tree(
+                        root_qubit_id, *device_mgr.get(), apsp, n_qubits);
+                } else {
+                    return qsyn::hamiltonian::build_bonsai_ternary_tree(
+                        *device_mgr.get(), apsp, n_qubits);
+                }
+            }();
+            if (!tree.has_value()) {
+                spdlog::error("Failed to build Bonsai ternary tree");
+                return CmdExecResult::error;
+            }
+            fmt::println("{}", qsyn::hamiltonian::to_string(tree.value()));
+            return CmdExecResult::done;
+        }};
 }
 
 dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
@@ -242,6 +290,7 @@ dvlab::Command device_cmd(qsyn::device::DeviceMgr& device_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(device_mgr);
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_list_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_print_cmd(device_mgr));
+    cmd.add_subcommand("device-cmd-group", device_bonsai_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_checkout_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_read_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_fetch_cmd(device_mgr));

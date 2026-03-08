@@ -32,7 +32,9 @@ namespace qsyn::device {
  */
 void Device::add_gate_info(
     std::pair<size_t, size_t> const& qubit_id_pair, GateInfo info) {
-    _adjacency_map[qubit_id_pair.first].emplace_back(qubit_id_pair.second);
+    if (!is_adjacency(qubit_id_pair.first, qubit_id_pair.second)) {
+        _adjacency_map[qubit_id_pair.first].emplace_back(qubit_id_pair.second);
+    }
     _2q_gate_info[qubit_id_pair].emplace_back(info);
 }
 

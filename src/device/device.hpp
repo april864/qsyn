@@ -68,7 +68,7 @@ public:
 
     std::vector<size_t> const& get_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id); }
     size_t get_num_adjacencies(size_t qubit_id) const { return _adjacency_map.at(qubit_id).size(); }
-    bool is_adjacency(size_t a, size_t b) const { return dvlab::contains(_adjacency_map.at(a), b); }
+    bool is_adjacency(size_t a, size_t b) const { return _2q_gate_info.contains(std::make_pair(a, b)); }
 
     virtual std::string info_string() const;
 
