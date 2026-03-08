@@ -1,18 +1,18 @@
 /*
   PackageName  [ hamiltonian ]
   Synopsis     [ Ternary tree structure ]
-  Author       [ April Wang (april864) ]
+  Author       [ April Wang (april864), Mu-Te (Joshua) Lau (joshmtlau) ]
 */
 
 #include "ternary_tree.hpp"
+
+#include <fmt/core.h>
 
 #include <cassert>
 #include <memory>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "fmt/format.h"
 
 namespace qsyn::hamiltonian {
 
@@ -31,7 +31,7 @@ void TernaryNode::set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edg
 }
 
 TernaryTree::TernaryTree() : _num_qubits(1) {
-    _root             = std::make_unique<TernaryNode>();
+    _root             = std::make_unique<TernaryQubitNode>(0);
     _index_to_node[0] = _root.get();
 }
 
@@ -40,7 +40,7 @@ TernaryTree::TernaryTree(size_t num_qubits) {
         throw std::invalid_argument("A ternary tree must have at least one node (root)");
     }
 
-    _root             = std::make_unique<TernaryNode>();
+    _root             = std::make_unique<TernaryQubitNode>(0);
     _index_to_node[0] = _root.get();
 
     _num_qubits = 1;
@@ -71,8 +71,10 @@ std::unique_ptr<TernaryNode> clone_node(
     if (old_node->is_leg()) {
         new_node = std::make_unique<TernaryLeg>(new_parent, nullptr);
     } else {
-        new_node              = std::make_unique<TernaryNode>(new_parent, nullptr);
-        new_node->qubit_label = old_node->qubit_label;
+        auto const old_qubit_node = dynamic_cast<TernaryQubitNode*>(old_node);
+        assert(old_qubit_node);
+        new_node                                                     = std::make_unique<TernaryQubitNode>(old_qubit_node->id, new_parent, nullptr);
+        dynamic_cast<TernaryQubitNode*>(new_node.get())->qubit_label = old_qubit_node->qubit_label;
     }
     TernaryNode* new_node_ptr = new_node.get();
     old_to_new[old_node]      = new_node_ptr;
@@ -96,7 +98,7 @@ std::unique_ptr<TernaryNode> clone_node(
 
 TernaryTree::TernaryTree(TernaryTree const& other) : _num_qubits(other._num_qubits) {
     if (!other._root) {
-        _root             = std::make_unique<TernaryNode>();
+        _root             = std::make_unique<TernaryQubitNode>(0);
         _index_to_node[0] = _root.get();
         _num_qubits       = 1;
         return;
@@ -116,14 +118,11 @@ TernaryTree::TernaryTree(TernaryTree const& other) : _num_qubits(other._num_qubi
     }
 }
 
-// Current invariant: qubit labels start at 0 and increment by 1 until num_qubits - 1
-// Required for _basic_load_pauli_strs() in tt_mappings.
-// TODO: fix this^ somehow
 void TernaryTree::assign_qubit(size_t node_index, QubitIdType qubit_label) {
     TernaryNode* node = _index_to_node.at(node_index);
 
-    node->qubit_label           = qubit_label;
-    _qubit_to_node[qubit_label] = node;
+    dynamic_cast<TernaryQubitNode*>(node)->qubit_label = qubit_label;
+    _qubit_to_node[qubit_label]                        = node;
 }
 
 size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
@@ -132,7 +131,7 @@ size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
     }
 
     auto const node_index      = _num_qubits++;
-    auto child                 = std::make_unique<TernaryNode>(parent);
+    auto child                 = std::make_unique<TernaryQubitNode>(node_index, parent);
     TernaryNode* child_ptr     = child.get();
     _index_to_node[node_index] = child_ptr;
 
@@ -196,8 +195,10 @@ void append_node_hierarchy(TernaryNode* node, std::string const& prefix,
         out += "(leg)\n";
         return;
     }
-    if (node->qubit_label.has_value()) {
-        out += fmt::format("q{}\n", *node->qubit_label);
+    auto const qubit_node = dynamic_cast<TernaryQubitNode*>(node);
+    assert(qubit_node);
+    if (qubit_node->qubit_label.has_value()) {
+        out += fmt::format("q{}\n", *qubit_node->qubit_label);
     } else {
         out += "(unassigned)\n";
     }
@@ -226,8 +227,10 @@ std::string to_string(TernaryTree const& tree) {
     if (!root) {
         return "(empty tree)";
     }
-    if (root->qubit_label.has_value()) {
-        out += fmt::format("q{}\n", root->qubit_label.value());
+    auto const root_qubit_node = dynamic_cast<TernaryQubitNode*>(root);
+    assert(root_qubit_node);
+    if (root_qubit_node->qubit_label.has_value()) {
+        out += fmt::format("q{}\n", root_qubit_node->qubit_label.value());
     } else {
         out += "(unassigned)\n";
     }

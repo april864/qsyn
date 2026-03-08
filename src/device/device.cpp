@@ -76,7 +76,7 @@ std::optional<std::string> Device::gate_info_string(std::size_t qubit_id) const 
     for (auto const& [gate_idx, time, error] : _1q_gate_info.at(qubit_id)) {
         // NOTE (Mu-Te): I think the longest gate name is "measure" with 7
         // characters. So we use 8 characters for padding.
-        result += fmt::format("- {:>8}: Delay: {:>4.3} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
+        result += fmt::format("- {:>8}: Delay: {:<.3e} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
     }
     return result;
 }
@@ -96,7 +96,7 @@ tl::expected<std::string, TwoQubitGateInfoAccessError> Device::gate_info_string(
     for (auto const& [gate_idx, time, error] : _2q_gate_info.at(qubit_pair)) {
         // NOTE (Mu-Te): I think the longest gate name is "measure" with 7
         // characters. So we use 8 characters for padding.
-        result += fmt::format("- {:>8}: Delay: {:>4.3} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
+        result += fmt::format("- {:>8}: Delay: {:<.3e} (ns)    Error: {:<.3e}\n", _gate_set[gate_idx], time.count(), error);
     }
     return result;
 }

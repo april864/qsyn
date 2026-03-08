@@ -1,7 +1,7 @@
 /*
   PackageName  [ hamiltonian ]
   Synopsis     [ Ternary tree structure ]
-  Author       [ April Wang (april864) ]
+  Author       [ April Wang (april864), Mu-Te (Joshua) Lau (joshmtlau) ]
 */
 
 #pragma once
@@ -25,8 +25,6 @@ enum class BranchType : uint8_t {
 struct TernaryEdge;
 
 struct TernaryNode {
-    std::optional<QubitIdType> qubit_label{std::nullopt};
-
     TernaryNode* parent;
 
     std::array<std::unique_ptr<TernaryEdge>, 3> edges;
@@ -43,6 +41,13 @@ struct TernaryNode {
     TernaryEdge* get_mid() const { return get_edge(BranchType::mid); }
     TernaryEdge* get_right() const { return get_edge(BranchType::right); }
     void set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edge);
+};
+
+struct TernaryQubitNode : public TernaryNode {
+    std::size_t id;
+    std::optional<QubitIdType> qubit_label{std::nullopt};
+    TernaryQubitNode(std::size_t id, TernaryNode* p = nullptr, TernaryEdge* e = nullptr)
+        : TernaryNode(p, e), id(id) {}
 };
 
 struct TernaryLeg : public TernaryNode {

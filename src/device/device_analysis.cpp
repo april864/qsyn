@@ -30,13 +30,11 @@ float log_success_rate_floyd_warshall_cost(Device::QubitPair const& adj, Device 
     // assumes the first gate info is the only one for this adjacency
     auto const& gate_info = device.get_2q_gate_info_map().at(adj)[0];
 
-    // clamp (1 - error) to (epsilon, 1] to gates prevent log(0) or log(negative)
-    // this happens when error is 1 or close to 1 (bad couplings)
-    constexpr float epsilon     = 1e-12f;
-    float const one_minus_error = std::max(epsilon, 1.f - gate_info.error);
+    if (1.f - gate_info.error <= 0.f) {
+        return std::numeric_limits<float>::infinity();
+    }
 
-    // -log(1 - error) is small for low error; use minimum cost so all-zero costs don't make every node a center
-    return std::max(epsilon, -std::log2(one_minus_error));
+    return -std::log2(1.f - gate_info.error);
 }
 
 /**
@@ -50,17 +48,13 @@ APSPResult floyd_warshall(
     std::function<float(Device::QubitPair const&, Device const&)> const& cost_fn) {
     auto const n = device.get_num_qubits();
 
+    constexpr float inf = std::numeric_limits<float>::infinity();
     APSPResult result;
-    result.distance.assign(n, std::vector<std::optional<float>>(n, std::nullopt));
+    result.distance.assign(n, std::vector<float>(n, inf));
     result.predecessor.assign(n, std::vector<std::optional<QubitIdType>>(n, std::nullopt));
 
     for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < n; j++) {
-            if (i == j) {
-                result.distance[i][j]    = 0.f;
-                result.predecessor[i][j] = std::nullopt;
-            }
-        }
+        result.distance[i][i] = 0.f;
     }
 
     for (auto const& [adj, _] : device.get_2q_gate_info_map()) {
@@ -72,11 +66,11 @@ APSPResult floyd_warshall(
     for (size_t k = 0; k < n; k++) {
         for (size_t i = 0; i < n; i++) {
             for (size_t j = 0; j < n; j++) {
-                if (!result.distance[i][k].has_value() || !result.distance[k][j].has_value()) {
+                if (std::isinf(result.distance[i][k]) || std::isinf(result.distance[k][j])) {
                     continue;
                 }
-                auto const through_k = result.distance[i][k].value() + result.distance[k][j].value();
-                if (!result.distance[i][j].has_value() || result.distance[i][j].value() > through_k) {
+                auto const through_k = result.distance[i][k] + result.distance[k][j];
+                if (std::isinf(result.distance[i][j]) || result.distance[i][j] > through_k) {
                     result.distance[i][j]    = through_k;
                     result.predecessor[i][j] = result.predecessor[k][j];
                 }
@@ -91,8 +85,8 @@ std::vector<float> get_eccentricities(APSPResult const& apsp, Device const& devi
     std::vector<float> eccentricities(device.get_num_qubits(), std::numeric_limits<float>::lowest());
     for (size_t i = 0; i < device.get_num_qubits(); i++) {
         for (size_t j = 0; j < device.get_num_qubits(); j++) {
-            if (!apsp.distance[i][j].has_value()) continue;
-            eccentricities[i] = std::max(eccentricities[i], apsp.distance[i][j].value());
+            if (std::isinf(apsp.distance[i][j])) continue;
+            eccentricities[i] = std::max(eccentricities[i], apsp.distance[i][j]);
         }
     }
     return eccentricities;

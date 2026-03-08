@@ -44,7 +44,14 @@ void TTMapper::_basic_load_pauli_strs() {
             TernaryEdge* edge   = curr->incoming_edge;
             TernaryNode* parent = edge->source;
 
-            pauli_str[parent->qubit_label.value()] = simple_branch_assignment.at(edge->branch);
+            auto const parent_qubit_node = dynamic_cast<TernaryQubitNode*>(parent);
+            assert(parent_qubit_node);
+
+            auto const parent_id = parent_qubit_node->id;
+
+            assert(parent_id < _tree.num_qubits());
+
+            pauli_str[parent_id] = simple_branch_assignment.at(edge->branch);
 
             curr = parent;
         }

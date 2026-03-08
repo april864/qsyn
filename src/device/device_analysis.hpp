@@ -19,7 +19,7 @@ namespace qsyn::device {
 
 struct APSPResult {
     std::vector<std::vector<std::optional<QubitIdType>>> predecessor;
-    std::vector<std::vector<std::optional<float>>> distance;
+    std::vector<std::vector<float>> distance;  // use infinity for no path
 };
 
 using APSPCostFnType = std::function<float(Device::QubitPair const&, Device const&)>;

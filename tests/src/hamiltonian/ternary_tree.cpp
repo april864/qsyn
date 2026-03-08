@@ -26,7 +26,9 @@ TEST_CASE("TernaryTree single qubit (root only)", "[ternary_tree]") {
     TernaryNode* root = tree.get_root();
     REQUIRE(root != nullptr);
     REQUIRE(root->parent == nullptr);
-    REQUIRE(root->qubit_label == std::nullopt);
+    auto const root_qubit_node = dynamic_cast<TernaryQubitNode*>(root);
+    REQUIRE(root_qubit_node != nullptr);
+    REQUIRE(root_qubit_node->qubit_label == std::nullopt);
     REQUIRE(!root->is_leg());
 
     // Root has three edges (to legs)
@@ -104,12 +106,18 @@ TEST_CASE("TernaryTree assign_qubit and get_node_by_qubit", "[ternary_tree]") {
     tree.assign_qubit(3, 40);
 
     REQUIRE(tree.get_node_by_qubit(10) == tree.get_root());
-    REQUIRE(tree.get_node_by_qubit(10)->qubit_label == 10);
-    REQUIRE(tree.get_node_by_qubit(20)->qubit_label == 20);
+    auto const qubit_10_node = dynamic_cast<TernaryQubitNode*>(tree.get_node_by_qubit(10));
+    REQUIRE(qubit_10_node != nullptr);
+    REQUIRE(qubit_10_node->qubit_label == 10);
+    auto const qubit_20_node = dynamic_cast<TernaryQubitNode*>(tree.get_node_by_qubit(20));
+    REQUIRE(qubit_20_node != nullptr);
+    REQUIRE(qubit_20_node->qubit_label == 20);
 
     // Reassign
     tree.assign_qubit(1, 99);
-    REQUIRE(tree.get_node_by_qubit(99)->qubit_label == 99);
+    auto const qubit_99_node = dynamic_cast<TernaryQubitNode*>(tree.get_node_by_qubit(99));
+    REQUIRE(qubit_99_node != nullptr);
+    REQUIRE(qubit_99_node->qubit_label == 99);
 }
 
 TEST_CASE("TernaryTree legs are TernaryLeg and have correct parent", "[ternary_tree]") {
@@ -173,22 +181,45 @@ TEST_CASE("TernaryTree copy constructor deep copy", "[ternary_tree]") {
         TernaryNode* copy_node = copy.get_node_by_index(i);
         REQUIRE(copy_node != nullptr);
         REQUIRE(copy_node != orig_node);
-        REQUIRE(copy_node->qubit_label == orig_node->qubit_label);
+        auto const orig_qubit_node = dynamic_cast<TernaryQubitNode*>(orig_node);
+        auto const copy_qubit_node = dynamic_cast<TernaryQubitNode*>(copy_node);
+        REQUIRE(copy_qubit_node != nullptr);
+        REQUIRE(copy_qubit_node != orig_qubit_node);
+        REQUIRE(copy_qubit_node->qubit_label == orig_qubit_node->qubit_label);
     }
 
     REQUIRE(copy.get_node_by_qubit(10) == copy.get_root());
-    REQUIRE(copy.get_node_by_qubit(20)->qubit_label == 20);
-    REQUIRE(copy.get_node_by_qubit(30)->qubit_label == 30);
-    REQUIRE(copy.get_node_by_qubit(40)->qubit_label == 40);
+    {
+        auto const qubit_10_node = dynamic_cast<TernaryQubitNode*>(copy.get_node_by_qubit(10));
+        REQUIRE(qubit_10_node != nullptr);
+        REQUIRE(qubit_10_node->qubit_label == 10);
+        auto const qubit_20_node = dynamic_cast<TernaryQubitNode*>(copy.get_node_by_qubit(20));
+        REQUIRE(qubit_20_node != nullptr);
+        REQUIRE(qubit_20_node->qubit_label == 20);
+        auto const qubit_30_node = dynamic_cast<TernaryQubitNode*>(copy.get_node_by_qubit(30));
+        REQUIRE(qubit_30_node != nullptr);
+        REQUIRE(qubit_30_node->qubit_label == 30);
+        auto const qubit_40_node = dynamic_cast<TernaryQubitNode*>(copy.get_node_by_qubit(40));
+        REQUIRE(qubit_40_node != nullptr);
+        REQUIRE(qubit_40_node->qubit_label == 40);
+    }
 
     REQUIRE(copy.get_legs().size() == original.get_legs().size());
     REQUIRE(copy.get_legs().size() == num_legs(4));
 
     // Mutating the copy does not affect the original
     copy.assign_qubit(1, 99);
-    REQUIRE(original.get_node_by_qubit(20)->qubit_label == 20);
-    REQUIRE(original.get_node_by_index(1)->qubit_label == 20);
-    REQUIRE(copy.get_node_by_qubit(99)->qubit_label == 99);
+    {
+        auto const qubit_20_node = dynamic_cast<TernaryQubitNode*>(original.get_node_by_qubit(20));
+        REQUIRE(qubit_20_node != nullptr);
+        REQUIRE(qubit_20_node->qubit_label == 20);
+        auto const qubit_id_1_node = dynamic_cast<TernaryQubitNode*>(original.get_node_by_index(1));
+        REQUIRE(qubit_id_1_node != nullptr);
+        REQUIRE(qubit_id_1_node->qubit_label == 20);
+        auto const qubit_99_node = dynamic_cast<TernaryQubitNode*>(copy.get_node_by_qubit(99));
+        REQUIRE(qubit_99_node != nullptr);
+        REQUIRE(qubit_99_node->qubit_label == 99);
+    }
 }
 
 TEST_CASE("TernaryTree copy constructor single qubit", "[ternary_tree]") {
@@ -215,8 +246,12 @@ TEST_CASE("TernaryTree move constructor", "[ternary_tree]") {
     REQUIRE(moved.num_qubits() == 4);
     REQUIRE(moved.get_root() == orig_root);
     REQUIRE(moved.get_node_by_index(0) == orig_root);
-    REQUIRE(moved.get_node_by_qubit(5)->qubit_label == 5);
-    REQUIRE(moved.get_node_by_qubit(6)->qubit_label == 6);
+    auto const qubit_5_node = dynamic_cast<TernaryQubitNode*>(moved.get_node_by_qubit(5));
+    REQUIRE(qubit_5_node != nullptr);
+    REQUIRE(qubit_5_node->qubit_label == 5);
+    auto const qubit_6_node = dynamic_cast<TernaryQubitNode*>(moved.get_node_by_qubit(6));
+    REQUIRE(qubit_6_node != nullptr);
+    REQUIRE(qubit_6_node->qubit_label == 6);
     REQUIRE(moved.get_legs().size() == orig_legs_size);
     REQUIRE(moved.get_legs().size() == num_legs(4));
 
@@ -234,9 +269,15 @@ TEST_CASE("TernaryTree move then use moved-to", "[ternary_tree]") {
     TernaryTree b(std::move(a));
 
     REQUIRE(b.get_node_by_index(0) != nullptr);
-    REQUIRE(b.get_node_by_index(0)->qubit_label == 0);
-    REQUIRE(b.get_node_by_index(1)->qubit_label == 1);
-    REQUIRE(b.get_node_by_index(2)->qubit_label == 2);
+    auto const qubit_0_node = dynamic_cast<TernaryQubitNode*>(b.get_node_by_index(0));
+    REQUIRE(qubit_0_node != nullptr);
+    REQUIRE(qubit_0_node->qubit_label == 0);
+    auto const qubit_1_node = dynamic_cast<TernaryQubitNode*>(b.get_node_by_index(1));
+    REQUIRE(qubit_1_node != nullptr);
+    REQUIRE(qubit_1_node->qubit_label == 1);
+    auto const qubit_2_node = dynamic_cast<TernaryQubitNode*>(b.get_node_by_index(2));
+    REQUIRE(qubit_2_node != nullptr);
+    REQUIRE(qubit_2_node->qubit_label == 2);
     REQUIRE(b.get_leg(0) != nullptr);
     REQUIRE(b.get_leg(0)->is_leg());
 }

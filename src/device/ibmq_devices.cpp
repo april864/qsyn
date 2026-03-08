@@ -119,8 +119,8 @@ void parse_gates(IBMQDeviceJsons const& jsons, IBMQDevice& device) {
         if (auto gate_error = find_gate_parameter(gate, "gate_error")) {
             gate_info.error = *gate_error;
         }
-        if (auto gate_delay = find_gate_parameter(gate, "gate_delay")) {
-            gate_info.time = GateDelayNanoSec{*gate_delay};
+        if (auto gate_length = find_gate_parameter(gate, "gate_length")) {
+            gate_info.time = GateDelayNanoSec{*gate_length};
         }
 
         auto const qubits = gate["qubits"].get<std::vector<size_t>>();

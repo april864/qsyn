@@ -1,7 +1,7 @@
 /*
   PackageName  [ hamiltonian ]
   Synopsis     [ Implement the Bonsai mapping for fermionic Hamiltonian to qubit Hamiltonian ]
-  Author       [ April Wang (april864) ]
+  Author       [ Mu-Te (Joshua) Lau (joshmtlau) ]
 */
 
 #pragma once

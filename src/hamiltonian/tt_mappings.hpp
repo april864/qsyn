@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +30,13 @@ public:
     TTMapper(int num_qubits)
         : _tree(TernaryTree(num_qubits)) {
         _basic_assign_qubits();
+        _basic_load_pauli_strs();
+        _pair_legs();
+        _load_ferm_ops();
+    }
+
+    TTMapper(TernaryTree tree)
+        : _tree(std::move(tree)) {
         _basic_load_pauli_strs();
         _pair_legs();
         _load_ferm_ops();

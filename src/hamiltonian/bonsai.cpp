@@ -1,11 +1,12 @@
 /*
   PackageName  [ hamiltonian ]
   Synopsis     [ Implement the Bonsai mapping for fermionic Hamiltonian to qubit Hamiltonian ]
-  Author       [ April Wang (april864) ]
+  Author       [ Mu-Te (Joshua) Lau (joshmtlau) ]
 */
 
 #include "bonsai.hpp"
 
+#include <cmath>
 #include <queue>
 #include <unordered_set>
 
@@ -71,9 +72,13 @@ std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, 
     // handle the center qubit, which is already in the tree
     assign_and_mark_visited(0, root_qubit_id);
     for (auto const& neighbor : device.get_adjacencies(root_qubit_id)) {
+        auto const d = apsp.distance[root_qubit_id][neighbor];
+        if (std::isinf(d)) {
+            continue;
+        }
         qubit_queue.push(PQItem{
-            .dist_to_center = apsp.distance[root_qubit_id][neighbor].value(),
-            .dist           = apsp.distance[root_qubit_id][neighbor].value(),
+            .dist_to_center = d,
+            .dist           = d,
             .qubit          = neighbor,
             .parent_qubit   = root_qubit_id,
         });
@@ -81,9 +86,8 @@ std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, 
 
     while (tt.num_qubits() < n_qubits) {
         if (qubit_queue.empty()) {
-            throw std::runtime_error(
-                fmt::format("Bonsai: device has only {} qubits connected from center; cannot build tree of size {}",
-                            tt.num_qubits(), n_qubits));
+            spdlog::error("Bonsai: Cannot find more qubits to add to the tree (possibly disconnected device?)");
+            return std::nullopt;
         }
         auto const [dist_to_center, dist, qubit, parent_qubit] = qubit_queue.top();
         qubit_queue.pop();
@@ -100,25 +104,19 @@ std::optional<TernaryTree> build_bonsai_ternary_tree(std::size_t root_qubit_id, 
 
         for (auto const& neighbor : device.get_adjacencies(qubit)) {
             auto const dist_to_center = apsp.distance[root_qubit_id][neighbor];
-            if (!dist_to_center.has_value()) {
-                throw std::runtime_error(
-                    fmt::format("Qubit {} is not connected to the center {}\n"
-                                "Bonsai mapping requires a connected device",
-                                qubit, root_qubit_id));
+            if (std::isinf(dist_to_center)) {
+                continue;
             }
 
             auto const dist = apsp.distance[qubit][neighbor];
-            if (!dist.has_value()) {
-                throw std::runtime_error(
-                    fmt::format("Invalid APSPResult: Coupling ({}, {}) "
-                                "should have a valid distance",
-                                qubit, neighbor));
+            if (std::isinf(dist)) {
+                continue;
             }
 
             qubit_queue.push(
                 PQItem{
-                    .dist_to_center = dist_to_center.value(),
-                    .dist           = dist.value(),
+                    .dist_to_center = dist_to_center,
+                    .dist           = dist,
                     .qubit          = neighbor,
                     .parent_qubit   = qubit,
                 });
