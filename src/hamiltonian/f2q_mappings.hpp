@@ -48,6 +48,8 @@ class TernaryTreeMapping : public FermionToQubitMapping {
 public:
     TernaryTreeMapping(std::size_t n_modes)
         : FermionToQubitMapping(n_modes), _mapper(n_modes) {}
+    TernaryTreeMapping(TernaryTree tree)
+        : FermionToQubitMapping(tree.num_qubits()), _mapper(std::move(tree)) {}
     ~TernaryTreeMapping() override = default;
 
     std::vector<ComplexPauliTerm> map(std::size_t p, bool is_creation) const override;

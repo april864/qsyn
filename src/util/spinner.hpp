@@ -17,7 +17,7 @@ namespace utils {
 
 class Spinner {
 public:
-    Spinner(std::string const& message = "", std::string const& done_message = "");
+    Spinner(std::string const& message = "");
     ~Spinner();
 
 private:
@@ -28,9 +28,8 @@ private:
 };
 
 template <typename F>
-auto with_spinner(F&& call, std::string const& message = "",
-                  std::string const& done_message = "") -> decltype(std::forward<F>(call)()) {
-    Spinner spinner(message, done_message);
+auto with_spinner(F&& call, std::string const& message = "") -> decltype(std::forward<F>(call)()) {
+    Spinner spinner(message);
     return std::forward<F>(call)();
 }
 

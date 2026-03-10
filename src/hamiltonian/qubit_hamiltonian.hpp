@@ -9,6 +9,8 @@
 #include <fmt/format.h>
 
 #include <complex>
+#include <filesystem>
+#include <optional>
 #include <string_view>
 
 #include "tableau/pauli_product_trait.hpp"
@@ -195,29 +197,9 @@ public:
 
     std::string to_string() const;
 
-    // file and procedure related functions
-    auto get_filename() const {
-        return _filename;
-    }
-    auto set_filename(std::string const& filename) {
-        _filename = filename;
-    }
-
-    auto get_procedures() const {
-        return _procedures;
-    }
-    auto add_procedure(std::string const& procedure) {
-        _procedures.push_back(procedure);
-    }
-    auto add_procedures(std::vector<std::string> const& procedures) {
-        _procedures.insert(_procedures.end(), procedures.begin(), procedures.end());
-    }
-
 private:
     std::vector<HermitianPauliTerm> _terms;
     size_t _n_qubits;
-    std::string _filename;
-    std::vector<std::string> _procedures;
 };
 
 /**
@@ -230,6 +212,9 @@ bool is_all_commutative(QubitHamiltonian const& hamilt);
 
 }  // namespace hamiltonian
 }  // namespace qsyn
+
+std::optional<qsyn::hamiltonian::QubitHamiltonian> read_qubit_hamiltonian(
+    std::filesystem::path const& filepath);
 
 template <>
 struct fmt::formatter<std::complex<double>> {

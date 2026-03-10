@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <functional>
 #include <unordered_set>
 
 #include "util/graph/digraph.hpp"
@@ -72,6 +73,16 @@ build_min_edge_subgraph(
 
 }  // namespace detail
 
+/**
+ * Build a minimum spanning arborescence rooted at 'root'.
+ *
+ * Assumption: the input graph is (weakly) connected; otherwise Edmonds'
+ * algorithm is not well-defined for a single global arborescence.
+ *
+ * @param g The graph to build the MST of.
+ * @param root The root vertex of the MST.
+ * @return The MST.
+ */
 template <typename VertexAttr, typename CostType>
 requires std::signed_integral<CostType> || std::floating_point<CostType>
 Digraph<VertexAttr, CostType>
@@ -180,20 +191,34 @@ minimum_spanning_arborescence(
     return mst;
 }
 
+/**
+ * Build a minimum spanning arborescence of the graph. This function will try
+ * all possible roots and return the one that minimizes the total weight of the
+ * MST.
+ *
+ * Assumption: the input graph is (weakly) connected; otherwise there is no
+ * single global arborescence spanning all vertices.
+ *
+ * @param g The graph to build the MST of.
+ * @return The MST and the root vertex.
+ */
 template <typename VertexAttr, typename CostType>
 requires std::signed_integral<CostType> || std::floating_point<CostType>
 std::pair<Digraph<VertexAttr, CostType>,
           typename Digraph<VertexAttr, CostType>::Vertex>
 minimum_spanning_arborescence(
     Digraph<VertexAttr, CostType> const& g) {
-    using DigraphT          = Digraph<VertexAttr, CostType>;
-    using VertexT           = typename DigraphT::Vertex;
-    auto const total_weight = [&](DigraphT const& g) {
+    using DigraphT = Digraph<VertexAttr, CostType>;
+    using VertexT  = typename DigraphT::Vertex;
+    using EdgeT    = typename DigraphT::Edge;
+
+    auto const default_cost_fn = [&](EdgeT const& e) { return g[e]; };
+
+    auto const total_weight = [&](DigraphT const& g_mst) {
         auto sum = CostType{0};
-        // circumvents compilation error in clang for g.edges()
-        for (auto const& v : g.vertices()) {
-            for (auto const& e : g.out_edges(v)) {
-                sum += g[e];
+        for (auto const& v : g_mst.vertices()) {
+            for (auto const& e : g_mst.out_edges(v)) {
+                sum += default_cost_fn(e);
             }
         }
         return sum;
@@ -213,6 +238,47 @@ minimum_spanning_arborescence(
     }
 
     return {mst, root};
+}
+
+/**
+ * Build a minimum spanning arborescence of the graph using a custom cost function.
+ *
+ * @param g The graph to build the MST of.
+ * @param cost_fn The cost function to use.
+ * @return The MST and the root vertex.
+ */
+template <typename VertexAttr, typename EdgeAttr, typename CostFn>
+std::pair<Digraph<VertexAttr, EdgeAttr>,
+          typename Digraph<VertexAttr, EdgeAttr>::Vertex>
+minimum_spanning_arborescence_with_cost(
+    Digraph<VertexAttr, EdgeAttr> const& g,
+    CostFn const& cost_fn) {
+    using InputDigraphT = Digraph<VertexAttr, EdgeAttr>;
+    using EdgeT         = typename InputDigraphT::Edge;
+    using CostType      = typename std::decay_t<decltype(cost_fn(std::declval<EdgeT>()))>;
+    using CostDigraphT  = Digraph<VertexAttr, CostType>;
+    using VertexT       = typename CostDigraphT::Vertex;
+
+    // Build a cost-weighted graph using the custom cost function.
+    // We create a new graph with the costs because Edmonds' algorithm adds
+    // new vertices to the graph during the process, rendering the cost function
+    // ill-defined.
+    CostDigraphT cost_graph;
+    for (auto const& v : g.vertices()) {
+        cost_graph.add_vertex_with_id(v);
+    }
+    for (auto const& u : g.vertices()) {
+        for (auto const& v : g.out_neighbors(u)) {
+            EdgeT const e{u, v};
+            cost_graph.add_edge(e, cost_fn(e));
+        }
+    }
+
+    // Compute MST on the cost-weighted graph using the standard algorithm.
+    auto const [mst_cost_graph, root] = minimum_spanning_arborescence(cost_graph);
+
+    // Return the MST (with cost-based edge weights) and chosen root.
+    return {mst_cost_graph, root};
 }
 
 }  // namespace dvlab

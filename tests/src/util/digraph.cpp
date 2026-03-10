@@ -1,7 +1,10 @@
 #include "util/graph/digraph.hpp"
+#include "util/graph/floyd_warshall.hpp"
 
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <limits>
 
 #include "util/graph/minimum_spanning_arborescence.hpp"
 
@@ -114,4 +117,33 @@ TEST_CASE("minimum spanning arborescence 2", "[digraph]") {
     mst_expected.add_edge(0, 3, -9);
 
     REQUIRE(mst == mst_expected);
+}
+
+TEST_CASE("generic floyd_warshall", "[digraph]") {
+    using Digraph = dvlab::Digraph<int, int>;
+    auto g        = Digraph{3};
+    g.add_edge(0, 1, 0);
+    g.add_edge(1, 2, 0);
+    g.add_edge(0, 2, 0);
+
+    auto const cost = [](Digraph::Edge e) {
+        if (e.src == 0 && e.dst == 1) return 1.f;
+        if (e.src == 1 && e.dst == 2) return 1.f;
+        if (e.src == 0 && e.dst == 2) return 10.f;
+        return std::numeric_limits<float>::infinity();
+    };
+
+    auto const apsp = dvlab::floyd_warshall(g, cost);
+
+    REQUIRE(apsp.vertices.size() == 3);
+    REQUIRE(apsp.distance.size() == 3);
+    REQUIRE(apsp.predecessor.size() == 3);
+
+    // 0 -> 1 cost 1, 1 -> 2 cost 1, 0 -> 2 direct cost 10; shortest 0->2 is via 1 = 2
+    REQUIRE(apsp.distance[0][2] == 2.f);
+    REQUIRE(apsp.predecessor[0][2].value() == 1u);
+
+    REQUIRE(apsp.distance[0][0] == 0.f);
+    REQUIRE(apsp.distance[0][1] == 1.f);
+    REQUIRE(apsp.predecessor[0][1].value() == 0u);
 }

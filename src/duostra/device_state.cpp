@@ -84,7 +84,7 @@ std::tuple<QubitIdType, QubitIdType> DeviceState::get_next_swap_cost(QubitIdType
     auto const& q_next   = get_physical_qubit(next_idx);
     auto const cost      = std::max(q_source.get_occupied_time(), q_next.get_occupied_time());
 
-    assert(_device->is_adjacency(source, next_idx));
+    assert(_device->is_adjacent(source, next_idx));
     return {next_idx, cost};
 }
 

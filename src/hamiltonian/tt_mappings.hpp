@@ -27,7 +27,7 @@ struct FermionOps {
  */
 class TTMapper {
 public:
-    TTMapper(int num_qubits)
+    TTMapper(size_t num_qubits)
         : _tree(TernaryTree(num_qubits)) {
         _basic_assign_qubits();
         _basic_load_pauli_strs();

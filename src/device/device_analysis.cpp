@@ -9,7 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ranges>
+
+#include "util/graph/floyd_warshall.hpp"
 
 namespace qsyn::device {
 
@@ -27,7 +28,7 @@ float default_floyd_warshall_cost(Device::QubitPair const& /*adj*/, Device const
  */
 float log_success_rate_floyd_warshall_cost(Device::QubitPair const& adj, Device const& device) {
     // assumes the first gate info is the only one for this adjacency
-    auto const& gate_info = device.get_2q_gate_info_map().at(adj)[0];
+    auto const& gate_info = device.get_gate_info(adj)[0];
 
     if (1.f - gate_info.error <= 0.f) {
         return std::numeric_limits<float>::infinity();
@@ -37,54 +38,18 @@ float log_success_rate_floyd_warshall_cost(Device::QubitPair const& adj, Device 
 }
 
 /**
- * @brief Floyd-Warshall Algorithm. Solve All Pairs Shortest Path (APSP)
- *
- * @param device Physical qubit adjacency information
- * @param cost_fn Function to compute the cost of an adjacency. If not provided, the cost is assumed to be 1 for all adjacencies.
+ * @brief Floyd-Warshall APSP for the device coupling graph.
+ *        Wraps cost_fn so broken couplings (error == 1) always get cost inf, then delegates to generic APSP.
  */
 APSPResult floyd_warshall(
     Device const& device,
     std::function<float(Device::QubitPair const&, Device const&)> const& cost_fn) {
-    auto const n = device.get_num_qubits();
-
-    constexpr float inf = std::numeric_limits<float>::infinity();
-    APSPResult result;
-    result.distance.assign(n, std::vector<float>(n, inf));
-    result.predecessor.assign(n, std::vector<std::optional<QubitIdType>>(n, std::nullopt));
-
-    for (size_t i = 0; i < n; i++) {
-        result.distance[i][i] = 0.f;
-    }
-
-    for (auto const& [adj, _] : device.get_2q_gate_info_map()) {
-        auto const& [i, j] = adj;
-        // if the error rate is 1, the cost should be infinity
-        // regardless of the cost function. Even for noise-agnostic qubit
-        // mappings, allowing using these couplings is just too ridiculous.
-        auto const cost = (device.get_2q_gate_info_map().at(adj)[0].error == 1.f)
-                              ? std::numeric_limits<float>::infinity()
-                              : cost_fn(adj, device);
-
-        result.distance[i][j]    = cost;
-        result.predecessor[i][j] = i;
-    }
-
-    for (size_t k = 0; k < n; k++) {
-        for (size_t i = 0; i < n; i++) {
-            for (size_t j = 0; j < n; j++) {
-                if (std::isinf(result.distance[i][k]) || std::isinf(result.distance[k][j])) {
-                    continue;
-                }
-                auto const through_k = result.distance[i][k] + result.distance[k][j];
-                if (std::isinf(result.distance[i][j]) || result.distance[i][j] > through_k) {
-                    result.distance[i][j]    = through_k;
-                    result.predecessor[i][j] = result.predecessor[k][j];
-                }
-            }
-        }
-    }
-
-    return result;
+    auto const edge_cost = [&](Device::QubitPair const& e) {
+        return (device.get_gate_info(e)[0].error == 1.f)
+                   ? std::numeric_limits<float>::infinity()
+                   : cost_fn(e, device);
+    };
+    return dvlab::floyd_warshall(device.get_coupling_graph(), edge_cost);
 }
 
 std::vector<float> get_eccentricities(APSPResult const& apsp, Device const& device) {
@@ -148,6 +113,8 @@ std::optional<std::vector<QubitIdType>> get_shortest_path(APSPResult const& apsp
     return path;
 }
 
+QubitFilterFn accept_all_qubit_ids = [](QubitIdType const& /*qubit_id*/) { return true; };
+
 /**
  * @brief Get the connected components of the device.
  * @param apsp APSPResult. This is used to check if two qubits are effectively
@@ -159,13 +126,16 @@ std::optional<std::vector<QubitIdType>> get_shortest_path(APSPResult const& apsp
            that can reach each other.
  */
 std::vector<std::vector<QubitIdType>>
-get_connected_components(APSPResult const& apsp, Device const& device) {
+get_connected_components(
+    APSPResult const& apsp,
+    Device const& device,
+    QubitFilterFn const& filter_fn) {
     std::vector<std::vector<QubitIdType>> connected_components;
 
     std::vector<bool> visited(device.get_num_qubits(), false);
 
     for (size_t i = 0; i < device.get_num_qubits(); i++) {
-        if (visited[i]) continue;
+        if (!filter_fn(i) || visited[i]) continue;
         // do DFS to find all qubits that can reach i
         connected_components.push_back(std::vector<QubitIdType>());
         std::vector<QubitIdType> stack;
@@ -173,7 +143,7 @@ get_connected_components(APSPResult const& apsp, Device const& device) {
         while (!stack.empty()) {
             auto const current = stack.back();
             stack.pop_back();
-            if (visited[current]) continue;
+            if (!filter_fn(current) || visited[current]) continue;
             visited[current] = true;
             connected_components.back().push_back(current);
             for (auto const& neighbor : device.get_adjacencies(current)) {

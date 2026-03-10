@@ -24,10 +24,8 @@ constexpr char const* spinner_chars = "|/-\\";
 constexpr auto spin_interval        = std::chrono::milliseconds(80);
 }  // namespace
 
-Spinner::Spinner(std::string const& message, std::string const& done_message)
-    : _message(message),
-      _done_message{done_message},
-      _stop(false) {
+Spinner::Spinner(std::string const& message)
+    : _message(message), _stop(false) {
     if (!is_terminal(stderr)) {
         fmt::print(stderr, "{}\n", _message);
         return;
@@ -55,7 +53,6 @@ Spinner::~Spinner() {
         _thread.join();
         // clear the line
         fmt::print(stderr, "\r{}\r", std::string(_message.size() + 2, ' '));
-        fmt::print(stderr, "{}\n", _done_message);
         std::fflush(stderr);
     }
 }

@@ -44,7 +44,7 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
         [](ArgumentParser& parser) {
             parser.description("print Device information");
             parser.add_argument<size_t>("ids")
-                .nargs(0, 2)
+                .nargs(NArgsOption::zero_or_more)
                 .help(
                     "if not specified, print basic information about the device;\n"
                     "if one ID is specified, print information about the qubit with the ID; \n"
@@ -87,14 +87,28 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
             }
 
             if (parser.parsed("--connected-components")) {
-                auto const connected_components = get_connected_components(apsp, *device_mgr.get());
+                auto const ids       = parser.get<std::vector<size_t>>("ids");
+                auto const filter_fn = [&](QubitIdType const& qubit_id) {
+                    if (ids.size() == 0) return true;
+                    return dvlab::contains(ids, qubit_id);
+                };
+
+                auto const connected_components =
+                    get_connected_components(apsp, *device_mgr.get(), filter_fn);
                 for (auto const& component : connected_components) {
-                    fmt::println("Component (size {}): [{}]", component.size(), fmt::join(component, ", "));
+                    fmt::println("Component (size {}): [{}]",
+                                 component.size(), fmt::join(component, ", "));
                 }
                 return CmdExecResult::done;
             }
 
             auto const ids = parser.get<std::vector<size_t>>("ids");
+
+            if (ids.size() > 2) {
+                spdlog::error("Too many qubit IDs specified. Please specify at most two qubit IDs.");
+                return CmdExecResult::error;
+            }
+
             if (ids.size() == 0) {
                 fmt::println("{}", device_mgr.get()->info_string());
 
@@ -106,7 +120,7 @@ dvlab::Command device_print_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 }
                 fmt::println("{}", gate_info.value());
             } else {
-                auto gate_info = device_mgr.get()->gate_info_string(std::make_pair(ids[0], ids[1]));
+                auto gate_info = device_mgr.get()->gate_info_string(Device::QubitPair{ids[0], ids[1]});
                 if (!gate_info.has_value()) {
                     switch (gate_info.error()) {
                         case TwoQubitGateInfoAccessError::invalid_first_qubit_id:

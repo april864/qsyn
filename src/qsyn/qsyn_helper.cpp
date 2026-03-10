@@ -21,6 +21,7 @@
 #include "cmd/duostra_cmd.hpp"
 #include "cmd/extractor_cmd.hpp"
 #include "cmd/qbham_cmd.hpp"
+#include "cmd/fham_cmd.hpp"
 #include "cmd/qcir_cmd.hpp"
 #include "cmd/tableau_cmd.hpp"
 #include "cmd/tensor_cmd.hpp"
@@ -126,7 +127,8 @@ bool read_qsynrc_file(dvlab::CommandLineInterface& cli, std::filesystem::path qs
 bool initialize_qsyn(
     dvlab::CommandLineInterface& cli, qsyn::device::DeviceMgr& device_mgr, qsyn::qcir::QCirMgr& qcir_mgr,
     qsyn::tensor::TensorMgr& tensor_mgr, qsyn::zx::ZXGraphMgr& zxgraph_mgr, qsyn::tableau::TableauMgr& tableau_mgr,
-    qsyn::hamiltonian::QubitHamiltonianMgr& qbham_mgr) {
+    qsyn::hamiltonian::QubitHamiltonianMgr& qbham_mgr,
+    qsyn::hamiltonian::FermionHamiltonianMgr& fham_mgr) {
     spdlog::set_pattern("%L%v");
     spdlog::set_level(spdlog::level::warn);
 
@@ -140,7 +142,8 @@ bool initialize_qsyn(
            qsyn::tensor::add_tensor_cmds(cli, tensor_mgr) &&
            qsyn::zx::add_zx_cmds(cli, zxgraph_mgr) &&
            qsyn::tableau::add_tableau_command(cli, tableau_mgr) &&
-           qsyn::hamiltonian::add_qbham_cmds(cli, qbham_mgr, tableau_mgr);
+           qsyn::hamiltonian::add_qbham_cmds(cli, device_mgr, qbham_mgr, tableau_mgr) &&
+           qsyn::hamiltonian::add_fham_cmds(cli, fham_mgr, qbham_mgr, qcir_mgr, device_mgr);
 }
 
 dvlab::argparse::ArgumentParser get_qsyn_parser(std::string_view const prog_name) {

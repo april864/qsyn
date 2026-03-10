@@ -8,6 +8,14 @@
 
 #include <fmt/format.h>
 
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "spdlog/spdlog.h"
+
 namespace qsyn {
 
 namespace hamiltonian {
@@ -20,13 +28,12 @@ HermitianPauliTerm to_hermitian_pauli_term(ComplexPauliTerm const& term) {
     return HermitianPauliTerm(term.pauli_product(), term.coeff().real());
 }
 
-QubitHamiltonian::QubitHamiltonian(size_t n_qubits) : _n_qubits(n_qubits), _filename("") {}
+QubitHamiltonian::QubitHamiltonian(size_t n_qubits) : _n_qubits(n_qubits) {}
 
 QubitHamiltonian::QubitHamiltonian(
     std::initializer_list<HermitianPauliTerm> const& terms)
     : _terms(terms),
-      _n_qubits(_terms.begin()->n_qubits()),
-      _filename("") {}
+      _n_qubits(_terms.begin()->n_qubits()) {}
 
 QubitHamiltonian&
 QubitHamiltonian::h(size_t qubit) noexcept {
@@ -99,3 +106,51 @@ ComplexPauliTerm& ComplexPauliTerm::operator*=(ComplexPauliTerm const& rhs) {
 
 }  // namespace hamiltonian
 }  // namespace qsyn
+
+std::optional<qsyn::hamiltonian::QubitHamiltonian> read_qubit_hamiltonian(
+    std::filesystem::path const& filepath) {
+    using namespace qsyn::hamiltonian;
+
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        spdlog::error("Cannot open file: {}", filepath.string());
+        return std::nullopt;
+    }
+
+    std::string line;
+    std::vector<std::pair<double, std::string>> terms;
+    size_t n_qubits = 0;
+
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+
+        std::stringstream ss(line);
+        double coeff;
+        std::string pauli_str;
+
+        if (ss >> coeff >> pauli_str) {
+            if (n_qubits == 0) {
+                n_qubits = pauli_str.length();
+            } else if (pauli_str.length() != n_qubits) {
+                spdlog::error(
+                    "Inconsistent qubit count in file. Expected {}, got '{}'",
+                    n_qubits,
+                    pauli_str);
+                return std::nullopt;
+            }
+            terms.emplace_back(coeff, pauli_str);
+        }
+    }
+
+    if (n_qubits == 0) {
+        spdlog::error("File is empty or contains no valid terms.");
+        return std::nullopt;
+    }
+
+    QubitHamiltonian hamilt(n_qubits);
+    for (auto const& [coeff, pauli_str] : terms) {
+        hamilt.add_term(HermitianPauliTerm(pauli_str, coeff));
+    }
+
+    return hamilt;
+}

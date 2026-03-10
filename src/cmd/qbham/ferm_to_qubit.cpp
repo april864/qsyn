@@ -6,8 +6,12 @@
 
 #include "./ferm_to_qubit.hpp"
 
+#include <spdlog/spdlog.h>
+
+#include "cmd/device_mgr.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/treespile.hpp"
 
 using namespace dvlab::argparse;
 

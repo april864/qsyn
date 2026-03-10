@@ -22,6 +22,7 @@
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"
 #include "cmd/qbham_mgr.hpp"
+#include "cmd/fham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"
@@ -43,6 +44,7 @@ qsyn::tensor::TensorMgr tensor_mgr{"Tensor"};
 qsyn::zx::ZXGraphMgr zxgraph_mgr{"ZXGraph"};
 qsyn::tableau::TableauMgr tableau_mgr{"Tableau"};
 qsyn::hamiltonian::QubitHamiltonianMgr qbham_mgr{"QbHam"};
+qsyn::hamiltonian::FermionHamiltonianMgr fham_mgr{"FHam"};
 // NOLINTEND(readability-identifier-naming)
 
 std::string const version_str = fmt::format(
@@ -62,7 +64,7 @@ int main(int argc, char** argv) {
         return;
     });
 
-    if (!qsyn::initialize_qsyn(cli, device_mgr, qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr)) {
+    if (!qsyn::initialize_qsyn(cli, device_mgr, qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr, fham_mgr)) {
         return -1;
     }
 

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "cli/cli.hpp"
+#include "cmd/device_mgr.hpp"
 #include "cmd/qbham_mgr.hpp"
 
 namespace qsyn::hamiltonian {

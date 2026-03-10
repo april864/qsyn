@@ -127,9 +127,11 @@ tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(std::size_
     return tt;
 }
 /**
- * @brief Build a Bonsai ternary tree for a given device and APSP result. The tree will be rooted at one of the centers of the device coupling graph.
+ * @brief Build a Bonsai ternary tree for a given device and APSP result.
+ *        The tree will be rooted at one of the centers of the device coupling graph.
  * @param device Device
- * @param apsp APSP result. The caller should compute the APSP result before calling this function.
+ * @param apsp APSP result. The caller should compute the APSP result before
+          calling this function.
  * @param n_qubits Number of qubits in the final Bonsai tree. If not specified,
  *        a tree with all qubits in the device will be built.
  * @return Bonsai ternary tree, or a failure reason.

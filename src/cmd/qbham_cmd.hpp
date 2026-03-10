@@ -8,13 +8,14 @@
 #pragma once
 
 #include "cli/cli.hpp"
+#include "cmd/device_mgr.hpp"
 #include "cmd/qbham_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 
 namespace qsyn::hamiltonian {
 
-dvlab::Command qbham_cmd(QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr);
+dvlab::Command qbham_cmd(device::DeviceMgr& device_mgr, QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr);
 
-bool add_qbham_cmds(dvlab::CommandLineInterface& cli, QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr);
+bool add_qbham_cmds(dvlab::CommandLineInterface& cli, device::DeviceMgr& device_mgr, QubitHamiltonianMgr& qbham_mgr, tableau::TableauMgr& tableau_mgr);
 
 }  // namespace qsyn::hamiltonian

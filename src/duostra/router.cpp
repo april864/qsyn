@@ -144,7 +144,7 @@ bool Router::is_executable(qcir::QCirGate const& gate) {
 
     auto physical_qubits_ids{_get_physical_qubits(gate)};
     assert(get<1>(physical_qubits_ids) != max_qubit_id);
-    return _device_state.get_device().is_adjacency(get<0>(physical_qubits_ids), get<1>(physical_qubits_ids));
+    return _device_state.get_device().is_adjacent(get<0>(physical_qubits_ids), get<1>(physical_qubits_ids));
 }
 
 /**
@@ -267,7 +267,7 @@ std::vector<GateInfo> Router::apsp_routing(qcir::QCirGate const& gate, std::tupl
     auto q0_id       = s0_id;
     auto q1_id       = s1_id;
 
-    while (!_device_state.get_device().is_adjacency(q0_id, q1_id)) {
+    while (!_device_state.get_device().is_adjacent(q0_id, q1_id)) {
         auto const [q0_next, q0_cost] = _device_state.get_next_swap_cost(q0_id, s1_id);
         auto const [q1_next, q1_cost] = _device_state.get_next_swap_cost(q1_id, s0_id);
 
@@ -287,7 +287,7 @@ std::vector<GateInfo> Router::apsp_routing(qcir::QCirGate const& gate, std::tupl
             q1_id = q1_next;
         }
     }
-    assert(_device_state.get_device().is_adjacency(q1_id, q0_id));
+    assert(_device_state.get_device().is_adjacent(q1_id, q0_id));
 
     auto const gate_cost = std::max(_device_state.get_physical_qubit(q0_id).get_occupied_time(),
                                     _device_state.get_physical_qubit(q1_id).get_occupied_time());
@@ -352,7 +352,7 @@ std::vector<GateInfo> Router::_traceback(qcir::QCirGate const& gate, PhysicalQub
     assert(t0.get_id() == t0.get_predecessor());
     assert(t1.get_id() == t1.get_predecessor());
 
-    assert(_device_state.get_device().is_adjacency(q0.get_id(), q1.get_id()));
+    assert(_device_state.get_device().is_adjacent(q0.get_id(), q1.get_id()));
     std::vector<GateInfo> operation_list;
 
     auto const operation_time = std::max(q0.get_cost(), q1.get_cost());

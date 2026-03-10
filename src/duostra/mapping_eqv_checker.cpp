@@ -122,7 +122,7 @@ bool MappingEquivalenceChecker::is_swap(QCirGate* candidate) {
  * @return false
  */
 bool MappingEquivalenceChecker::execute_swap(QCirGate* first, std::unordered_set<QCirGate*>& swaps) {
-    if (!_device_state.get_device().is_adjacency(first->get_qubit(0), first->get_qubit(1))) return false;
+    if (!_device_state.get_device().is_adjacent(first->get_qubit(0), first->get_qubit(1))) return false;
 
     swaps.emplace(first);
     auto next_gate = get_next(*_physical, first->get_id(), 0);
@@ -205,7 +205,7 @@ bool MappingEquivalenceChecker::execute_double(QCirGate* gate) {
         return false;
     }
 
-    if (!_device_state.get_device().is_adjacency(gate->get_qubit(0), gate->get_qubit(1))) return false;
+    if (!_device_state.get_device().is_adjacent(gate->get_qubit(0), gate->get_qubit(1))) return false;
 
     _dependency[logical_gate->get_qubit(0)] = get_next(*_logical, logical_gate->get_id(), 0);
     _dependency[logical_gate->get_qubit(1)] = get_next(*_logical, logical_gate->get_id(), 1);

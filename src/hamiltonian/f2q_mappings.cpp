@@ -70,12 +70,13 @@ QubitHamiltonian qubitize(FermionHamiltonian const& f_hamilt,
     // Accumulator for the final result; maps Pauli strings to their coefficients
     std::unordered_map<PauliProduct, std::complex<double>> term_map;
 
-    for (const auto& [original_coeff, operators] : f_hamilt.get_terms()) {
+    for (auto const& [original_coeff, operators] : f_hamilt.get_terms()) {
         // Start with identity and original coefficient
         std::vector<ComplexPauliTerm> current_state;
-        current_state.emplace_back(ComplexPauliTerm(
-            PauliProduct(std::vector<Pauli>(n_qubits, Pauli::i), false),
-            std::complex<double>(original_coeff, 0.0)));
+        current_state.emplace_back(
+            ComplexPauliTerm(
+                PauliProduct(std::vector<Pauli>(n_qubits, Pauli::i), false),
+                original_coeff));
 
         // Create JW term for each operator in the fermionic term
         for (const auto& [p, is_creation] : operators) {

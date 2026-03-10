@@ -292,9 +292,9 @@ std::optional<Device> read_qsyn_device_file(std::string const& filename) {
                     // might have different delays and errors.
                     // We will pretend they do for backward compatibility.
                     device.add_gate_info(
-                        std::make_pair(i, adj_list[i][j]), GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
+                        Device::QubitPair{i, adj_list[i][j]}, GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
                     device.add_gate_info(
-                        std::make_pair(adj_list[i][j], i), GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
+                        Device::QubitPair{adj_list[i][j], i}, GateInfo{.gate_idx = gate_idx, .time = GateDelayNanoSec{cx_delay[i][j]}, .error = cx_err[i][j]});
                 }
             }
         }

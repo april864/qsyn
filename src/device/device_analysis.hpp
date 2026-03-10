@@ -14,13 +14,11 @@
 
 #include "device/device.hpp"
 #include "qsyn/qsyn_type.hpp"
+#include "util/graph/floyd_warshall.hpp"
 
 namespace qsyn::device {
 
-struct APSPResult {
-    std::vector<std::vector<std::optional<QubitIdType>>> predecessor;
-    std::vector<std::vector<float>> distance;  // use infinity for no path
-};
+using APSPResult = dvlab::APSPResult<QubitIdType>;
 
 using APSPCostFnType = std::function<float(Device::QubitPair const&, Device const&)>;
 
@@ -33,21 +31,27 @@ APSPResult floyd_warshall(
 
 std::vector<float> get_eccentricities(APSPResult const& apsp, Device const& device);
 
+using QubitFilterFn = std::function<bool(QubitIdType const&)>;
+
+extern QubitFilterFn accept_all_qubit_ids;
+
 std::vector<QubitIdType>
 get_centers(
     std::vector<float> const& eccentricities,
-    std::function<bool(QubitIdType const&)> const& filter_fn =
-        [](QubitIdType const& /*qubit_id*/) { return true; });
+    QubitFilterFn const& filter_fn = accept_all_qubit_ids);
 
 std::vector<QubitIdType>
 get_centers(
     APSPResult const& apsp,
     Device const& device,
-    std::function<bool(QubitIdType const&)> const& filter_fn =
-        [](QubitIdType const& /*qubit_id*/) { return true; });
+    QubitFilterFn const& filter_fn = accept_all_qubit_ids);
 
 std::optional<std::vector<QubitIdType>> get_shortest_path(APSPResult const& apsp, QubitIdType src, QubitIdType dest);
 
-std::vector<std::vector<QubitIdType>> get_connected_components(APSPResult const& apsp, Device const& device);
+std::vector<std::vector<QubitIdType>>
+get_connected_components(
+    APSPResult const& apsp,
+    Device const& device,
+    QubitFilterFn const& filter_fn = accept_all_qubit_ids);
 
 }  // namespace qsyn::device

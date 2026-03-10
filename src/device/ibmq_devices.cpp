@@ -127,7 +127,7 @@ void parse_gates(IBMQDeviceJsons const& jsons, IBMQDevice& device) {
         if (qubits.size() == 1) {
             device.add_gate_info(qubits[0], gate_info);
         } else if (qubits.size() == 2) {
-            device.add_gate_info(std::make_pair(qubits[0], qubits[1]), gate_info);
+            device.add_gate_info(Device::QubitPair{qubits[0], qubits[1]}, gate_info);
         }
     }
 }
