@@ -125,6 +125,18 @@ void TernaryTree::assign_qubit(size_t node_index, QubitIdType qubit_label) {
     _qubit_to_node[qubit_label]                        = node;
 }
 
+void TernaryTree::swap_indices(std::size_t id1, std::size_t id2) {
+        if (id1 == id2) return;
+
+        auto* node1 = static_cast<TernaryQubitNode*>(_index_to_node.at(id1));
+        auto* node2 = static_cast<TernaryQubitNode*>(_index_to_node.at(id2));
+
+        std::swap(node1->id, node2->id);
+
+        _index_to_node[id1] = node2;
+        _index_to_node[id2] = node1;
+    }
+
 size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
     if (parent->get_edge(branch)) {
         throw std::runtime_error("Branch already has a node");
