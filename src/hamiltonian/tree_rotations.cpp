@@ -12,9 +12,9 @@
 
 namespace qsyn::hamiltonian {
 
-// For non-connectivity preserving (NCP), choose a random terminal node-v with 
+// Non-connectivity preserving (NCP): choose a random terminal node-v with 
 // three legs and attach it to the free leg of another node-w that is neither 
-// v nor its parent.
+// v nor its parent. For CP, check that this is allowed on the hardware.
 void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     if (!tt || tt->num_qubits() < 2) return;
 
@@ -57,6 +57,70 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     // Do the swap
     TernaryEdge* edge_v = v->incoming_edge;
     TernaryEdge* edge_l = l->incoming_edge;
+    edge_v->target.swap(edge_l->target);
+
+    v->parent = edge_l->source;
+    v->incoming_edge = edge_l;
+
+    l->parent = edge_v->source;
+    l->incoming_edge = edge_v;
+}
+
+void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& device) {
+    if (!tt || tt->num_qubits() < 2) return;
+
+    struct CandidatePair {
+        TernaryNode* v;
+        TernaryLeg* leg;
+    };
+    std::vector<CandidatePair> candidates;
+
+    // Find all valid node and leg combinations
+    for (size_t i = 1; i < tt->num_qubits(); ++i) {
+        TernaryNode* v = tt->get_node_by_index(i);
+        
+        // Find v
+        if (v->get_left()->target->is_leg() &&
+            v->get_mid()->target->is_leg() &&
+            v->get_right()->target->is_leg()) {
+            
+            auto* v_qubit = static_cast<TernaryQubitNode*>(v);
+            if (!v_qubit->qubit_label.has_value()) continue;
+            auto v_qindex = v_qubit->qubit_label.value();
+
+            // Find w
+            for (TernaryLeg* leg : tt->get_legs()) {
+                TernaryNode* w = leg->parent;
+                
+                if (w != v && w != v->parent) {
+                    auto* w_qubit = static_cast<TernaryQubitNode*>(w);
+                    if (!w_qubit->qubit_label.has_value()) continue;
+                    auto w_qindex = w_qubit->qubit_label.value();
+
+                    // Check if the hardware has the necessary connection
+                    if (device.is_adjacent(v_qindex, w_qindex) || 
+                        device.is_adjacent(w_qindex, v_qindex)) {
+                        candidates.push_back({v, leg});
+                    }
+                }
+            }
+        }
+    }
+    if (candidates.empty()) return;
+
+    // Choose a pair to apply leaf move to
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
+    
+    CandidatePair move_pair = candidates[dist(gen)];
+    TernaryNode* v = move_pair.v;
+    TernaryLeg* l = move_pair.leg;
+
+    // Do the swap
+    TernaryEdge* edge_v = v->incoming_edge;
+    TernaryEdge* edge_l = l->incoming_edge;
+    
     edge_v->target.swap(edge_l->target);
 
     v->parent = edge_l->source;

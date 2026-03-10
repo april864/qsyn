@@ -7,6 +7,7 @@
 #pragma once
 
 #include "ternary_tree.hpp"
+#include "device/device.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -16,6 +17,7 @@ public:
   // three legs and attach it to the free leg of another node-w that is neither 
   // v nor its parent.
   void ncp_leaf_move(TernaryTree* tt);
+  void cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& device);
   // A node v different from the root with out-degree at most 2 is chosen 
   // as a new root. The path from root to v is identified, and the tree is 
   // updated so that child and parent designations are swapped along the path. 
