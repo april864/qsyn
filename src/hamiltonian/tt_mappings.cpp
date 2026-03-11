@@ -90,12 +90,25 @@ void TTMapper::_load_ferm_ops() {
         auto left_str  = _pauli_strs.at(_leg_pairs.at(i).first);
         auto right_str = _pauli_strs.at(_leg_pairs.at(i).second);
 
-        FermionOps ops;
-        ops.creation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
-                        ComplexPauliTerm(right_str, std::complex<double>(0, -0.5))};
+        auto* qubit_node = dynamic_cast<TernaryQubitNode*>(_tree.get_node_by_index(i));
+        assert(qubit_node);
 
-        ops.annihilation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
-                            ComplexPauliTerm(right_str, std::complex<double>(0, 0.5))};
+        FermionOps ops;
+        if (!qubit_node->is_braided) {
+            // a_j^ = 0.5 Sx - 0.5i Sy
+            ops.creation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
+                            ComplexPauliTerm(right_str, std::complex<double>(0, -0.5))};
+            // a_j = 0.5 Sx + 0.5i Sy
+            ops.annihilation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
+                                ComplexPauliTerm(right_str, std::complex<double>(0, 0.5))};
+        } else {
+            // a_j^ = 0.5 Sy + 0.5i Sx
+            ops.creation = {ComplexPauliTerm(left_str, std::complex<double>(0, 0.5)),
+                            ComplexPauliTerm(right_str, std::complex<double>(0.5, 0))};
+            // a_j = 0.5 Sy - 0.5i Sx
+            ops.annihilation = {ComplexPauliTerm(left_str, std::complex<double>(0, -0.5)),
+                                ComplexPauliTerm(right_str, std::complex<double>(0.5, 0))};
+        }
 
         _mode_to_ferm_ops.emplace(i, std::move(ops));
     }
