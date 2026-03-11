@@ -29,6 +29,12 @@ void append_trotterize_step(
     // TODO: Implement the Trotterization for a single step.
 
     for (auto const& term : hamilt) {
+        if (term.coeff() == 0.0) {
+            continue;
+        }
+        if (term.pauli_product().is_identity()) {
+            continue;
+        }
         prtabl.push_back(
             PauliRotation(term.pauli_product(),
                           dvlab::Phase(-term.coeff() * dt)));
