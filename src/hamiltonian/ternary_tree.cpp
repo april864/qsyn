@@ -118,6 +118,20 @@ TernaryTree::TernaryTree(TernaryTree const& other) : _num_qubits(other._num_qubi
     }
 }
 
+void TernaryTree::swap(TernaryTree& other) noexcept {
+    _root.swap(other._root);
+    
+    std::swap(_num_qubits, other._num_qubits);
+    
+    std::swap(_index_to_node, other._index_to_node);
+    std::swap(_qubit_to_node, other._qubit_to_node);
+    std::swap(_legs, other._legs);
+}
+
+void swap(TernaryTree& a, TernaryTree& b) noexcept {
+    a.swap(b);
+}
+
 void TernaryTree::assign_qubit(size_t node_index, QubitIdType qubit_label) {
     TernaryNode* node = _index_to_node.at(node_index);
 

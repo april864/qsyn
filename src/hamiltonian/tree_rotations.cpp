@@ -4,11 +4,16 @@
   Author       [ April Wang (april864)]
 */
 
+#include "tree_rotations.hpp"
+
 #include <random>
 #include <algorithm>
 #include <vector>
 
-#include "tree_rotations.hpp"
+#include "hamiltonian/f2q_mappings.hpp"
+#include "hamiltonian/qubit_hamiltonian.hpp"
+#include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -20,15 +25,17 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
 
     // Find nodes with three legs
     std::vector<TernaryNode*> candidate_nodes;
-    for (size_t i = 1; i < tt->num_qubits(); ++i) {
+    for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* node = tt->get_node_by_index(i);
+        if (node == tt->get_root()) continue;
+
         TernaryEdge* left_edge = node->get_left();
         TernaryEdge* mid_edge = node->get_mid();
         TernaryEdge* right_edge = node->get_right();
 
-        if (left_edge->target->is_leg() &&
-            mid_edge->target->is_leg() &&
-            right_edge->target->is_leg()) {
+        if (left_edge && left_edge->target && left_edge->target->is_leg() &&
+            mid_edge && mid_edge->target && mid_edge->target->is_leg() &&
+            right_edge && right_edge->target && right_edge->target->is_leg()) {
             candidate_nodes.push_back(node);
         }
     }
@@ -76,13 +83,19 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
     std::vector<CandidatePair> candidates;
 
     // Find all valid node and leg combinations
-    for (size_t i = 1; i < tt->num_qubits(); ++i) {
+    for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* v = tt->get_node_by_index(i);
+        if (v == tt->get_root()) continue;
         
         // Find v
-        if (v->get_left()->target->is_leg() &&
-            v->get_mid()->target->is_leg() &&
-            v->get_right()->target->is_leg()) {
+        auto* e_left = v->get_left();
+        auto* e_mid = v->get_mid();
+        auto* e_right = v->get_right();
+
+        // ADDED: Null checks before accessing targets
+        if (e_left && e_left->target && e_left->target->is_leg() &&
+            e_mid && e_mid->target && e_mid->target->is_leg() &&
+            e_right && e_right->target && e_right->target->is_leg()) {
             
             auto* v_qubit = static_cast<TernaryQubitNode*>(v);
             if (!v_qubit->qubit_label.has_value()) continue;
@@ -138,13 +151,14 @@ void TreeRotator::root_change(TernaryTree* tt) {
 
     // Find candidate nodes for new root
     std::vector<TernaryNode*> candidate_roots;
-    for (size_t i = 1; i < tt->num_qubits(); ++i) {
+    for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* node = tt->get_node_by_index(i);
+        if (node == tt->get_root()) continue;
         
         bool has_leg = false;
         for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
             TernaryEdge* edge = node->get_edge(b);
-            if (edge->target->is_leg()) {
+            if (edge && edge->target && edge->target->is_leg()) {
                 has_leg = true;
                 break;
             }
@@ -163,7 +177,7 @@ void TreeRotator::root_change(TernaryTree* tt) {
     std::vector<TernaryEdge*> candidate_edges;
     for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
         TernaryEdge* edge = new_root->get_edge(b);
-        if (edge->target->is_leg()) {
+        if (edge && edge->target && edge->target->is_leg()) {
             candidate_edges.push_back(edge);
         }
     }
@@ -182,6 +196,7 @@ void TreeRotator::root_change(TernaryTree* tt) {
     // path_nodes: [n0, n1, ..., nk] where n0 is old root and nk is new root
     
     size_t k = path_nodes.size() - 1;
+    if (k == 0) return;
     std::vector<TernaryEdge*> path_edges;
     for (size_t i = 1; i <= k; ++i) {
         path_edges.push_back(path_nodes[i]->incoming_edge);

@@ -8,6 +8,7 @@
 
 #include "ternary_tree.hpp"
 #include "device/device.hpp"
+#include "fermionic_hamiltonian.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -32,7 +33,6 @@ public:
   // opposite one, i.e., '+' is changed to '-' and vice versa.
   void majorana_braiding_change(TernaryTree* tt);
 
-private:
 };
 
 } // namespace
