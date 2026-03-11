@@ -46,6 +46,7 @@ struct TernaryNode {
 struct TernaryQubitNode : public TernaryNode {
     std::size_t id;
     std::optional<QubitIdType> qubit_label{std::nullopt};
+    bool is_braided{false};
     TernaryQubitNode(std::size_t id, TernaryNode* p = nullptr, TernaryEdge* e = nullptr)
         : TernaryNode(p, e), id(id) {}
 };
@@ -83,8 +84,10 @@ public:
     friend void swap(TernaryTree& a, TernaryTree& b) noexcept;
 
     void assign_qubit(size_t node_index, QubitIdType qubit_label);
+    void swap_indices(std::size_t id1, std::size_t id2);
 
     TernaryNode* get_root() const { return _root.get(); }
+    std::unique_ptr<TernaryNode>& get_root_ptr() { return _root; }
 
     TernaryNode* get_node_by_qubit(QubitIdType qubit_label) const { return _qubit_to_node.at(qubit_label); }
     TernaryNode* get_node_by_index(size_t node_index) const { return _index_to_node.at(node_index); }

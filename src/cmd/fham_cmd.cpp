@@ -19,6 +19,9 @@
 #include "hamiltonian/treespile.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
+#include "hamiltonian/ternary_tree.hpp"
+#include "hamiltonian/bonsai.hpp"
+#include "device/device_analysis.hpp"
 
 using namespace dvlab::argparse;
 
@@ -53,7 +56,7 @@ dvlab::Command fham_read_cmd(FermionHamiltonianMgr& fham_mgr) {
         });
 }
 
-dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltonianMgr& qbham_mgr) {
+dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltonianMgr& qbham_mgr, device::DeviceMgr& device_mgr) {
     return dvlab::Command(
         "qubitize",
         [](ArgumentParser& parser) {
@@ -64,6 +67,10 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 .default_value("jw")
                 .constraint(choices_allow_prefix({"jw", "ternary_tree"}))
                 .help("Fermion-to-qubit mapping strategy: 'jw' (Jordan-Wigner, default) or 'ternary_tree'");
+
+            parser.add_argument<bool>("-o", "--optimize")
+                .action(store_true)
+                .help("Run simulated annealing to minimize Pauli weight (only applies to ternary_tree strategy)");
         },
         [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(fham_mgr)) {
@@ -73,21 +80,62 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             auto const* f_ham = fham_mgr.get();
 
             auto const strategy = parser.get<std::string>("--strategy");
+            bool optimize = parser.get<bool>("--optimize");
 
             QubitHamiltonian q_ham = [&]() {
                 if (strategy == "jw") {
                     return qubitize(*f_ham, JordanWignerMapping{f_ham->n_modes()});
                 }
+
                 // strategy == "ternary_tree"
-                return qubitize(*f_ham, TernaryTreeMapping{f_ham->n_modes()});
+                std::optional<TernaryTree> initial_tree = std::nullopt;
+                device::Device const* dev_ptr = nullptr;
+
+                if (!device_mgr.empty()) {
+                    dev_ptr = device_mgr.get();
+                    if (dev_ptr->get_num_qubits() < f_ham->n_modes()) {
+                        fmt::println("Warning: Device ({} qubits) is too small for Hamiltonian ({} modes).", dev_ptr->get_num_qubits(), f_ham->n_modes());
+                        fmt::println("Using standard ternary tree...");
+                        dev_ptr = nullptr;
+                    } else {
+                        fmt::println("Using device topology to build ternary tree.");
+                    
+                        auto apsp = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
+                        auto tree_result = build_bonsai_ternary_tree(*dev_ptr, apsp, f_ham->n_modes());
+                        
+                        if (tree_result.has_value()) {
+                            initial_tree = std::move(tree_result.value());
+                        } else {
+                            spdlog::warn("Failed to build Bonsai tree (device too small/disconnected?). Using standard ternary tree.");
+                        }
+                    }
+                }
+
+                if (!initial_tree.has_value()) {
+                    if (device_mgr.empty()) {
+                        fmt::println("No device. Using standard ternary tree.");
+                    }
+                    initial_tree = TernaryTree(f_ham->n_modes());
+                }
+                TernaryTree tree = std::move(initial_tree.value());
+
+                if (optimize) {
+                    fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
+                    device::Device const* dev_ptr = device_mgr.empty() ? nullptr : device_mgr.get();
+                    
+                    tree = optimize_mapping(tree, *f_ham, dev_ptr);
+                }
+                return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});
             }();
 
             size_t id = qbham_mgr.get_next_id();
             qbham_mgr.add(id, std::make_unique<QubitHamiltonian>(std::move(q_ham)));
             qbham_mgr.set_filename(fham_mgr.get_filename());
             qbham_mgr.add_procedures(fham_mgr.get_procedures());
-            qbham_mgr.add_procedure(
-                strategy == "jw" ? "fham_qubitize_jw" : "fham_qubitize_ternary_tree");
+
+            std::string proc_name = strategy == "jw" ? "fham_qubitize_jw" : "fham_qubitize_ternary_tree";
+            if (strategy == "ternary_tree" && optimize) proc_name += "_optimized";
+            qbham_mgr.add_procedure(proc_name);
 
             fmt::println("Transformed focused fermionic Hamiltonian to QubitHamiltonian with ID: {}", id);
 
@@ -223,7 +271,7 @@ dvlab::Command fham_cmd(
     cmd.add_subcommand("fham-cmd-group", dvlab::utils::mgr_checkout_cmd(fham_mgr));
     cmd.add_subcommand("fham-cmd-group", dvlab::utils::mgr_copy_cmd(fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_read_cmd(fham_mgr));
-    cmd.add_subcommand("fham-cmd-group", fham_qubitize_cmd(fham_mgr, qbham_mgr));
+    cmd.add_subcommand("fham-cmd-group", fham_qubitize_cmd(fham_mgr, qbham_mgr, device_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_treespile_cmd(device_mgr, fham_mgr, qcir_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_print_cmd(fham_mgr));
 

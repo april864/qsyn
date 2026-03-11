@@ -257,7 +257,7 @@ minimum_spanning_arborescence_with_cost(
     using EdgeT         = typename InputDigraphT::Edge;
     using CostType      = typename std::decay_t<decltype(cost_fn(std::declval<EdgeT>()))>;
     using CostDigraphT  = Digraph<VertexAttr, CostType>;
-    using VertexT       = typename CostDigraphT::Vertex;
+    // using VertexT       = typename CostDigraphT::Vertex;
 
     // Build a cost-weighted graph using the custom cost function.
     // We create a new graph with the costs because Edmonds' algorithm adds
