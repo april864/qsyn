@@ -26,6 +26,7 @@ tl::expected<qcir::QCir, TreespileFailReason>
 treespile(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
+    double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn = device::default_floyd_warshall_cost);
 

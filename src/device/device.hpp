@@ -49,12 +49,9 @@ class Device {
     };
 
 public:
-    virtual ~Device()         = default;
-    using CouplingGraph       = dvlab::Digraph<std::vector<GateInfo>, std::vector<GateInfo>>;
-    using QubitPair           = CouplingGraph::Edge;
-    using OneQubitGateInfoMap = std::unordered_map<size_t, std::vector<GateInfo>>;
-    using TwoQubitGateInfoMap = std::unordered_map<QubitPair, std::vector<GateInfo>, AdjacencyPairHash>;
-    using AdjacencyMap        = std::unordered_map<size_t, std::vector<size_t>>;
+    virtual ~Device()   = default;
+    using CouplingGraph = dvlab::Digraph<std::vector<GateInfo>, std::vector<GateInfo>>;
+    using QubitPair     = CouplingGraph::Edge;
 
     std::string get_name() const { return _name; }
     auto get_gate_set() const { return _gate_set; }
@@ -83,9 +80,6 @@ public:
 protected:
     std::string _name;
     std::vector<std::string> _gate_set;
-    // OneQubitGateInfoMap _1q_gate_info;
-    // TwoQubitGateInfoMap _2q_gate_info;
-    // AdjacencyMap _adjacency_map;
     CouplingGraph _graph;
 };
 

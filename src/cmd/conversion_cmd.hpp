@@ -11,9 +11,15 @@
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"
 #include "cmd/zxgraph_mgr.hpp"
+#include "cmd/qbham_mgr.hpp"
 
 namespace qsyn {
 
-bool add_conversion_cmds(dvlab::CommandLineInterface& cli, qcir::QCirMgr& qcir_mgr, tensor::TensorMgr& tensor_mgr, zx::ZXGraphMgr& zxgraph_mgr, tableau::TableauMgr& tableau_mgr);
+bool add_conversion_cmds(dvlab::CommandLineInterface& cli,
+                         qcir::QCirMgr& qcir_mgr,
+                         tensor::TensorMgr& tensor_mgr,
+                         zx::ZXGraphMgr& zxgraph_mgr,
+                         tableau::TableauMgr& tableau_mgr,
+                         hamiltonian::QubitHamiltonianMgr& qbham_mgr);
 
 }

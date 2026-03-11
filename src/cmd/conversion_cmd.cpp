@@ -14,10 +14,12 @@
 #include "argparse/arg_parser.hpp"
 #include "argparse/arg_type.hpp"
 #include "cli/cli.hpp"
+#include "cmd/qbham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"
 #include "cmd/zxgraph_mgr.hpp"
+#include "convert/qbham_to_tensor.hpp"
 #include "convert/qcir_to_tableau.hpp"
 #include "convert/qcir_to_tensor.hpp"
 #include "convert/qcir_to_zxgraph.hpp"
@@ -353,7 +355,59 @@ Command convert_from_tableau_cmd(tableau::TableauMgr& tableau_mgr, qcir::QCirMgr
         }};
 }
 
-Command conversion_cmd(QCirMgr& qcir_mgr, qsyn::tensor::TensorMgr& tensor_mgr, qsyn::zx::ZXGraphMgr& zxgraph_mgr, tableau::TableauMgr& tableau_mgr) {
+Command convert_from_qbham_cmd(hamiltonian::QubitHamiltonianMgr& qbham_mgr, tensor::TensorMgr& tensor_mgr) {
+    return {
+        "qbham",
+        [&](ArgumentParser& parser) {
+            parser.description("convert from QubitHamiltonian to other data structures");
+
+            auto subparsers = parser.add_subparsers("to-type")
+                                  .required(true);
+
+            auto to_tensor = subparsers.add_parser("tensor")
+                                 .description("convert from QubitHamiltonian to Tensor. Note that this outputs the ");
+            (void)to_tensor;
+        },
+        [&](ArgumentParser const& parser) {
+            if (!dvlab::utils::mgr_has_data(qbham_mgr)) return CmdExecResult::error;
+            auto const to_type = parser.get<std::string>("to-type");
+
+            if (to_type == "tensor") {
+                auto const* hamilt = qbham_mgr.get();
+
+                spdlog::info(
+                    "Converting QubitHamiltonian {} ({} qubits, {} terms) to Tensor {}...",
+                    qbham_mgr.focused_id(),
+                    (hamilt->begin() != hamilt->end()) ? hamilt->begin()->n_qubits() : 0,
+                    hamilt->n_terms(),
+                    tensor_mgr.get_next_id());
+
+                auto tensor = qsyn::to_tensor(*hamilt);
+                if (!tensor.has_value()) {
+                    spdlog::warn("QubitHamiltonian {} is empty; no tensor created.", qbham_mgr.focused_id());
+                    return CmdExecResult::done;
+                }
+
+                tensor_mgr.add(tensor_mgr.get_next_id());
+                tensor_mgr.set(std::make_unique<qsyn::tensor::QTensor<double>>(std::move(tensor.value())));
+
+                tensor_mgr.set_filename(qbham_mgr.get_filename());
+                tensor_mgr.add_procedures(qbham_mgr.get_procedures());
+                tensor_mgr.add_procedure("QBHAM2TS");
+
+                return CmdExecResult::done;
+            }
+
+            spdlog::error("The conversion is not supported yet!!");
+            return CmdExecResult::error;
+        }};
+}
+
+Command conversion_cmd(QCirMgr& qcir_mgr,
+                       qsyn::tensor::TensorMgr& tensor_mgr,
+                       qsyn::zx::ZXGraphMgr& zxgraph_mgr,
+                       tableau::TableauMgr& tableau_mgr,
+                       hamiltonian::QubitHamiltonianMgr& qbham_mgr) {
     auto cmd = dvlab::Command{
         "convert",
         [&](ArgumentParser& parser) {
@@ -368,6 +422,7 @@ Command conversion_cmd(QCirMgr& qcir_mgr, qsyn::tensor::TensorMgr& tensor_mgr, q
     cmd.add_subcommand("from-type", convert_from_zx_cmd(zxgraph_mgr, qcir_mgr, tensor_mgr));
     cmd.add_subcommand("from-type", convert_from_tensor_cmd(tensor_mgr, qcir_mgr));
     cmd.add_subcommand("from-type", convert_from_tableau_cmd(tableau_mgr, qcir_mgr));
+    cmd.add_subcommand("from-type", convert_from_qbham_cmd(qbham_mgr, tensor_mgr));
 
     return cmd;
 }
@@ -401,8 +456,13 @@ Command sk_decompose_cmd(qsyn::tensor::TensorMgr& tensor_mgr, QCirMgr& qcir_mgr)
             }};
 }
 
-bool add_conversion_cmds(dvlab::CommandLineInterface& cli, QCirMgr& qcir_mgr, qsyn::tensor::TensorMgr& tensor_mgr, qsyn::zx::ZXGraphMgr& zxgraph_mgr, tableau::TableauMgr& tableau_mgr) {
-    if (!(cli.add_command(conversion_cmd(qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr)) &&
+bool add_conversion_cmds(dvlab::CommandLineInterface& cli,
+                         QCirMgr& qcir_mgr,
+                         qsyn::tensor::TensorMgr& tensor_mgr,
+                         qsyn::zx::ZXGraphMgr& zxgraph_mgr,
+                         tableau::TableauMgr& tableau_mgr,
+                         hamiltonian::QubitHamiltonianMgr& qbham_mgr) {
+    if (!(cli.add_command(conversion_cmd(qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr)) &&
           cli.add_command(sk_decompose_cmd(tensor_mgr, qcir_mgr)) &&
           cli.add_alias("qc2zx", "convert qcir zx") &&
           cli.add_alias("qc2ts", "convert qcir tensor") &&
@@ -410,7 +470,8 @@ bool add_conversion_cmds(dvlab::CommandLineInterface& cli, QCirMgr& qcir_mgr, qs
           cli.add_alias("zx2qc", "convert zx qcir") &&
           cli.add_alias("ts2qc", "convert tensor qcir") &&
           cli.add_alias("qc2tabl", "convert qcir tableau") &&
-          cli.add_alias("tabl2qc", "convert tableau qcir"))) {
+          cli.add_alias("tabl2qc", "convert tableau qcir") &&
+          cli.add_alias("qbham2ts", "convert qbham tensor"))) {
         fmt::println(stderr, "Registering \"conversion\" commands fails... exiting");
         return false;
     }

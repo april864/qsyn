@@ -124,9 +124,9 @@ TermSynthesisInfo form_connected_components(
             return dvlab::contains(physical_qubits, qubit);
         });
 
-    fmt::println("Connected components for term {}:", term.to_string());
+    spdlog::debug("Connected components for term {}:", term.to_string());
     for (auto const& component : connected_components) {
-        fmt::println("- Component: [{}]", fmt::join(component, ", "));
+        spdlog::debug("- Component: [{}]", fmt::join(component, ", "));
     }
 
     TermSynthesisInfo result{
@@ -250,7 +250,7 @@ void synthesize_term(
     TernaryTree const& tree,
     device::APSPResult const& apsp,
     device::Device const& device,
-    size_t n_trotterization_steps,
+    double dt,
     qcir::QCir& qcir) {
     auto const& pauli_product = term.pauli_product();
     std::vector<size_t> physical_qubits;
@@ -291,8 +291,7 @@ void synthesize_term(
     auto const [mst, root] =
         dvlab::minimum_spanning_arborescence_with_cost(device_subgraph, mst_cost_fn);
 
-    fmt::println("MST for term {}:\n{}", term.to_string(),
-                 mst_to_string(mst, root, &ancilla_qubits));
+    spdlog::debug("MST for term {}:\n{}", term.to_string(), mst_to_string(mst, root, &ancilla_qubits));
 
     std::vector<size_t> post_order_traversal;
     std::stack<size_t> stack;
@@ -333,9 +332,9 @@ void synthesize_term(
             continue;
         }
         auto const src = *mst.in_neighbors(dst).begin();
-        conjugation_qcir.append(qcir::CXGate(), {src, dst});
+        conjugation_qcir.append(qcir::CXGate(), {dst, src});
         if (ancilla_qubits.contains(dst)) {
-            conjugation_qcir.append(qcir::CXGate(), {dst, src});
+            conjugation_qcir.append(qcir::CXGate(), {src, dst});
         }
     }
     qcir.compose(conjugation_qcir);
@@ -343,7 +342,7 @@ void synthesize_term(
     // synthesize a phase gate at the root.
     // for now, assumes there's only one trotterization step
 
-    qcir.append(qcir::PZGate(term.coeff() / static_cast<double>(n_trotterization_steps)), {root});
+    qcir.append(qcir::PZGate(-term.coeff() * dt), {root});
     conjugation_qcir.adjoint_inplace();
     qcir.compose(conjugation_qcir);
 }
@@ -354,6 +353,7 @@ tl::expected<qcir::QCir, TreespileFailReason>
 treespile(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
+    double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn) {
     //
@@ -395,8 +395,10 @@ treespile(
 
     qcir::QCir qcir(device.get_num_qubits());
 
+    auto const dt = time / static_cast<double>(n_trotterization_steps);
+
     for (auto const& term : qubit_hamiltonian) {
-        synthesize_term(term, tree.value(), apsp, device, n_trotterization_steps, qcir);
+        synthesize_term(term, tree.value(), apsp, device, dt, qcir);
     }
 
     if (n_trotterization_steps > 1) {

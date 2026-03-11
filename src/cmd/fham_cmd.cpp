@@ -138,7 +138,9 @@ dvlab::Command fham_treespile_cmd(
         [](ArgumentParser& parser) {
             parser.description(
                 "Apply treespile mapping from the focused fermionic Hamiltonian on the currently loaded device");
-            parser.add_argument<size_t>("n-trotterization-steps")
+            parser.add_argument<double>("time")
+                .help("Time for the Hamiltonian to evolve for");
+            parser.add_argument<size_t>("n-steps")
                 .help("Number of trotterization steps to apply");
             parser.add_argument<std::string>("--cost-fn")
                 .constraint(choices_allow_prefix({"log_success_rate", "default"}))
@@ -159,18 +161,20 @@ dvlab::Command fham_treespile_cmd(
             auto const& device = *device_mgr.get();
             auto const* f_ham  = fham_mgr.get();
 
-            auto const n_trotterization_steps = parser.get<size_t>("n-trotterization-steps");
-            if (n_trotterization_steps == 0) {
+            auto const n_steps = parser.get<size_t>("n-steps");
+            if (n_steps == 0) {
                 spdlog::error("Number of trotterization steps must be greater than 0");
                 return dvlab::CmdExecResult::error;
             }
+
+            auto const time        = parser.get<double>("time");
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
             auto cost_fn           = device::default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(*f_ham, device, n_trotterization_steps, cost_fn);
+            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn);
 
             if (!result.has_value()) {
                 auto const reason = result.error();
@@ -198,12 +202,6 @@ dvlab::Command fham_treespile_cmd(
             qcir_mgr.set_filename(fham_mgr.get_filename());
             qcir_mgr.add_procedures(fham_mgr.get_procedures());
             qcir_mgr.add_procedure("fham_treespile");
-
-            fmt::println(
-                "treespile succeeded. Generated QCir with ID {} ({} qubits, {} gates).",
-                new_id,
-                qcir_mgr.get()->get_num_qubits(),
-                qcir_mgr.get()->get_num_gates());
 
             return dvlab::CmdExecResult::done;
         });
