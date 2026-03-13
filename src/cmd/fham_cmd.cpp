@@ -133,7 +133,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             qbham_mgr.set_filename(fham_mgr.get_filename());
             qbham_mgr.add_procedures(fham_mgr.get_procedures());
 
-            std::string proc_name = strategy == "jw" ? "fham_qubitize_jw" : "fham_qubitize_ternary_tree";
+            std::string proc_name = strategy == "ternary_tree" ? "fham_qubitize_ternary_tree" : "fham_qubitize_jw";
             if (strategy == "ternary_tree" && optimize) proc_name += "_optimized";
             qbham_mgr.add_procedure(proc_name);
 
@@ -194,6 +194,9 @@ dvlab::Command fham_treespile_cmd(
                 .constraint(choices_allow_prefix({"log_success_rate", "default"}))
                 .default_value("default")
                 .help("cost function for Floyd-Warshall used inside treespile");
+            parser.add_argument<bool>("-o", "--optimize")
+                .action(store_true)
+                .help("Run simulated annealing to minimize Pauli weight");
         },
         [&](ArgumentParser const& parser) {
             if (device_mgr.empty()) {
@@ -217,12 +220,13 @@ dvlab::Command fham_treespile_cmd(
 
             auto const time        = parser.get<double>("time");
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
+            bool optimize          = parser.get<bool>("--optimize");
             auto cost_fn           = device::default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn);
+            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize);
 
             if (!result.has_value()) {
                 auto const reason = result.error();

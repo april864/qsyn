@@ -37,7 +37,8 @@ treespile(
     device::Device const& device,
     double time,
     size_t n_trotterization_steps,
-    device::APSPCostFnType const& cost_fn = device::default_floyd_warshall_cost);
+    device::APSPCostFnType const& cost_fn = device::default_floyd_warshall_cost,
+    bool optimize = false);
 
 
 }  // namespace qsyn::hamiltonian
