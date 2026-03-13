@@ -449,7 +449,8 @@ treespile(
     device::Device const& device,
     double time,
     size_t n_trotterization_steps,
-    device::APSPCostFnType const& cost_fn) {
+    device::APSPCostFnType const& cost_fn,
+    bool optimize) {
     //
     using FailReason = TreespileFailReason;
 
@@ -470,12 +471,16 @@ treespile(
 
     auto const apsp = floyd_warshall(device, cost_fn);
 
-    auto const tree = build_bonsai_ternary_tree(device, apsp, n_modes);
+    auto tree = build_bonsai_ternary_tree(device, apsp, n_modes);
 
     if (!tree.has_value()) {
         // NOTE: it's still possible for bonsai to fail because the device might
         // be disconnected.
         return tl::unexpected(FailReason::tt_build_failed_not_enough_qubits);
+    }
+
+    if (optimize) {
+        tree = optimize_mapping(*tree, hamiltonian, &device);
     }
 
     auto const mapping = TernaryTreeMapping(tree.value());
