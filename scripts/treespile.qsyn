@@ -1,0 +1,7 @@
+//!ARGS INPUT OUTPUT DEVICE COST_FN
+device fetch -f ${DEVICE}
+fham read ${INPUT}
+// fham treespile 10 3
+fham treespile 10 3 --cost-fn ${COST_FN}
+qcir write ${OUTPUT}
+
