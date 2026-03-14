@@ -189,6 +189,9 @@ dvlab::Command device_bonsai_cmd(qsyn::device::DeviceMgr& device_mgr) {
                 .help("number of qubits in the Bonsai tree. If not specified, all qubits in the device will be used.");
             parser.add_argument<size_t>("-r", "--root-qubit-id")
                 .help("ID of the qubit to root the tree at. If not specified, a center of the device coupling graph will be the root.");
+            parser.add_argument<bool>("-e", "--exhaustive")
+                .action(store_true)
+                .help("Exhaustively search for the best ternary tree, stemming from all qubits. This flag is ignored if --root-qubit-id is specified.");
             parser.add_argument<std::string>("--cost-fn")
                 .constraint(choices_allow_prefix({"log_success_rate", "default"}))
                 .default_value("default")
@@ -205,12 +208,16 @@ dvlab::Command device_bonsai_cmd(qsyn::device::DeviceMgr& device_mgr) {
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = log_success_rate_floyd_warshall_cost;
             }
+            bool exhaustive = parser.get<bool>("--exhaustive");
             auto const apsp = floyd_warshall(*device_mgr.get(), cost_fn);
             auto tree       = [&]() {
                 if (parser.parsed("--root-qubit-id")) {
                     auto const root_qubit_id = parser.get<size_t>("--root-qubit-id");
                     return qsyn::hamiltonian::build_bonsai_ternary_tree(
                         root_qubit_id, *device_mgr.get(), apsp, n_qubits);
+                } else if (exhaustive) {
+                    return qsyn::hamiltonian::build_bonsai_ternary_tree_exhaustive(
+                        *device_mgr.get(), apsp, n_qubits);
                 } else {
                     return qsyn::hamiltonian::build_bonsai_ternary_tree(
                         *device_mgr.get(), apsp, n_qubits);

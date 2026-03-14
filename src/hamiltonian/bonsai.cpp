@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <queue>
+#include <stack>
 #include <unordered_set>
 
 #include "device/device_analysis.hpp"
@@ -158,4 +159,66 @@ build_bonsai_ternary_tree(
     }
     return tl::unexpected(BonsaiFailReason::not_enough_qubits);
 }
+
+namespace {
+
+float calculate_tree_cost(TernaryTree const& tree, device::Device const& device, device::APSPResult const& apsp) {
+    float cost = 0;
+
+    // do a preorder traversal of the tree and sum up the distances of the edges
+    std::stack<TernaryNode*> stack;
+    stack.push(tree.get_root());
+    while (!stack.empty()) {
+        auto const node = stack.top();
+        stack.pop();
+        if (node->is_leg()) {
+            continue;
+        }
+        auto const targ_qubit = dynamic_cast<TernaryQubitNode*>(node);
+        assert(targ_qubit);
+        assert(targ_qubit->qubit_label.has_value());
+        for (auto const& edge : node->edges) {
+            if (edge->target->is_leg()) {
+                continue;
+            }
+            auto const ctrl_qubit = dynamic_cast<TernaryQubitNode*>(edge->target.get());
+            assert(ctrl_qubit);
+            assert(ctrl_qubit->qubit_label.has_value());
+            assert(device.is_adjacent(*targ_qubit->qubit_label, *ctrl_qubit->qubit_label));
+            // most of the time, the CNOTs will have the node nearer to the root as the target
+            // NOTE: we assume the first gate info is the only one for this adjacency
+            cost += apsp.distance[*targ_qubit->qubit_label][*ctrl_qubit->qubit_label];
+            stack.push(edge->target.get());
+        }
+    }
+    return cost;
+}
+
+}  // namespace
+
+tl::expected<TernaryTree, BonsaiFailReason>
+build_bonsai_ternary_tree_exhaustive(
+    device::Device const& device,
+    device::APSPResult const& apsp,
+    size_t n_qubits) {
+    n_qubits = std::min(n_qubits, device.get_num_qubits());
+
+    tl::expected<TernaryTree, BonsaiFailReason> best_tree =
+        tl::unexpected(BonsaiFailReason::not_enough_qubits);
+    float best_cost = std::numeric_limits<float>::infinity();
+
+    for (size_t root_qubit_id = 0; root_qubit_id < device.get_num_qubits(); ++root_qubit_id) {
+        auto tree = build_bonsai_ternary_tree(root_qubit_id, device, apsp, n_qubits);
+        if (tree.has_value()) {
+            // calculate the total edge weight of the tree
+            float const cost = calculate_tree_cost(tree.value(), device, apsp);
+            if (cost < best_cost) {
+                best_tree = std::move(tree.value());
+                best_cost = cost;
+            }
+        }
+    }
+    return best_tree;
+}
+
 }  // namespace qsyn::hamiltonian

@@ -49,6 +49,9 @@ void detail::dvlab_unreachable_impl(std::string_view file, int line, std::string
     fmt::println(stderr, "Source:\t\t{}, line {}\n", file, line);
     fmt::println(stderr, "This line of code should have been unreachable:\t{}", msg);
     abort();
+    return;  // NOLINT(readability-redundant-control-flow) :
+             // for some reason abort() is not enough to silence compiler warnings
+
 #else  // NDEBUG
 #if defined(__clang__) || defined(__GNUC__)
     __builtin_unreachable();

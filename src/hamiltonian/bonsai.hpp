@@ -20,8 +20,23 @@ enum class BonsaiFailReason : uint8_t {
     invalid_root_qubit,
 };
 
-tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(std::size_t root_qubit_id, device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
+tl::expected<TernaryTree, BonsaiFailReason>
+build_bonsai_ternary_tree(
+    std::size_t root_qubit_id,
+    device::Device const& device,
+    device::APSPResult const& apsp,
+    size_t n_qubits = std::numeric_limits<size_t>::max());
 
-tl::expected<TernaryTree, BonsaiFailReason> build_bonsai_ternary_tree(device::Device const& device, device::APSPResult const& apsp, size_t n_qubits = std::numeric_limits<size_t>::max());
+tl::expected<TernaryTree, BonsaiFailReason>
+build_bonsai_ternary_tree(
+    device::Device const& device,
+    device::APSPResult const& apsp,
+    size_t n_qubits = std::numeric_limits<size_t>::max());
+
+tl::expected<TernaryTree, BonsaiFailReason>
+build_bonsai_ternary_tree_exhaustive(
+    device::Device const& device,
+    device::APSPResult const& apsp,
+    size_t n_qubits = std::numeric_limits<size_t>::max());
 
 }  // namespace qsyn::hamiltonian

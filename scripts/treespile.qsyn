@@ -2,6 +2,6 @@
 device fetch -f ${DEVICE}
 fham read ${INPUT}
 // fham treespile 10 3
-fham treespile 10 3 --cost-fn ${COST_FN}
+fham treespile 10 3 --cost-fn ${COST_FN} --exhaustive
 qcir write ${OUTPUT}
 

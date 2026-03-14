@@ -17,10 +17,19 @@ namespace qsyn::hamiltonian {
 
 using Pauli = qsyn::tableau::Pauli;
 
-std::unordered_map<BranchType, Pauli> const simple_branch_assignment = {
-    {BranchType::left, Pauli::x},
-    {BranchType::mid, Pauli::y},
-    {BranchType::right, Pauli::z}};
+namespace {
+Pauli to_pauli(BranchType branch) {
+    switch (branch) {
+        case BranchType::left:
+            return Pauli::x;
+        case BranchType::mid:
+            return Pauli::y;
+        case BranchType::right:
+            return Pauli::z;
+    }
+    DVLAB_UNREACHABLE("Every branch type should be handled in the switch-case");
+}
+}  // namespace
 
 /**
  * @brief Basic method of assigning qubits to nodes.
@@ -51,7 +60,7 @@ void TTMapper::_basic_load_pauli_strs() {
 
             assert(parent_id < _tree.num_qubits());
 
-            pauli_str[parent_id] = simple_branch_assignment.at(edge->branch);
+            pauli_str[parent_id] = to_pauli(edge->branch);
 
             curr = parent;
         }

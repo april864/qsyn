@@ -12,7 +12,6 @@
 #include "device/device_analysis.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "qcir/qcir.hpp"
-#include "hamiltonian/tree_rotations.hpp"
 #include "ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {
@@ -27,8 +26,8 @@ enum class TreespileFailReason : uint8_t {
 double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham);
 
 TernaryTree optimize_mapping(
-    TernaryTree initial_tree, 
-    const FermionHamiltonian& f_ham, 
+    TernaryTree const& initial_tree,
+    const FermionHamiltonian& f_ham,
     const qsyn::device::Device* device = nullptr);
 
 tl::expected<qcir::QCir, TreespileFailReason>
@@ -38,7 +37,7 @@ treespile(
     double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn = device::default_floyd_warshall_cost,
-    bool optimize = false);
-
+    bool optimize                         = false,
+    bool exhaustive                       = false);
 
 }  // namespace qsyn::hamiltonian

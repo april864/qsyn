@@ -12,14 +12,15 @@
 #include <stack>
 #include <unordered_set>
 #include <vector>
-#include <random>
 
 #include "device/device_analysis.hpp"
 #include "hamiltonian/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/ternary_tree.hpp"
+#include "hamiltonian/tree_rotations.hpp"
 #include "qcir/basic_gate_type.hpp"
 #include "util/graph/minimum_spanning_arborescence.hpp"
+#include "util/simulated_annealing.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -353,7 +354,7 @@ void synthesize_term(
 double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham) {
     TernaryTreeMapping mapping(tt);
     QubitHamiltonian q_ham = qubitize(f_ham, mapping);
-    
+
     double total_weight = 0;
     for (const auto& term : q_ham) {
         for (size_t i = 0; i < term.n_qubits(); ++i) {
@@ -373,70 +374,47 @@ double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham)
  * @return Optimized TernaryTree mapping.
  */
 TernaryTree optimize_mapping(
-    TernaryTree initial_tree, 
-    const FermionHamiltonian& f_ham, 
+    TernaryTree const& initial_tree,
+    const FermionHamiltonian& f_ham,
     const qsyn::device::Device* device) {
-    
-    TernaryTree current_tree = initial_tree;
-    TernaryTree best_tree = initial_tree;
-
-    double current_cost = pauli_weight_cost(current_tree, f_ham);
-    double best_cost = current_cost;
-
-    // Simulated annealing parameters
-    double temperature = 20.0;
-    double cooling_rate = 0.99995;
-    double min_temperature = 0.3;
-
-    // Used to randomly choose tree rotation
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
-    std::uniform_int_distribution<> choose_rotation(0, 4);
-
+    using util::SimulatedAnnealing;
+    auto const wrapped_cost_fn =
+        [&](TernaryTree const& tree) { return pauli_weight_cost(tree, f_ham); };
     TreeRotator rotator;
-    int iterations = 0;
 
-    while (temperature > min_temperature) {
-        TernaryTree test_tree = current_tree;
+    using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
 
-        int rotation = choose_rotation(gen);
-        switch (rotation) {
-            case 0:
-                if (device) rotator.cp_leaf_move(&test_tree, *device);
-                else rotator.ncp_leaf_move(&test_tree);
-                break;
-            case 1:
-                rotator.root_change(&test_tree);
-                break;
-            case 2:
-                rotator.pauli_shuffle(&test_tree);
-                break;
-            case 3:
-                rotator.mode_association_swap(&test_tree);
-                break;
-            case 4:
-                rotator.majorana_braiding_change(&test_tree);
-                break;
-        }
+    auto const mutate_fns = std::vector<MutateFn>{
+        {
+            [&](TernaryTree& tree) {
+                if (device) {
+                    rotator.cp_leaf_move(&tree, *device);
+                } else {
+                    rotator.ncp_leaf_move(&tree);
+                }
+            },
+            [&](TernaryTree& tree) {
+                rotator.root_change(&tree);
+            },
+            [&](TernaryTree& tree) {
+                rotator.pauli_shuffle(&tree);
+            },
+            [&](TernaryTree& tree) {
+                rotator.mode_association_swap(&tree);
+            },
+            [&](TernaryTree& tree) {
+                rotator.majorana_braiding_change(&tree);
+            },
+        }};
 
-        // Calculate new Pauli weight, accept if lower or by probabiltiy
-        double new_cost = pauli_weight_cost(test_tree, f_ham);
-        if (new_cost < current_cost || 
-            std::exp((current_cost - new_cost) / temperature) > prob_dist(gen)) {
-        
-            current_tree = test_tree;
-            current_cost = new_cost;
+    auto const sa = SimulatedAnnealing<TernaryTree, double>(
+        /* init_temp    = */ 20.0,
+        /* cooling_rate = */ 0.99995,
+        /* min_temp     = */ 0.3,
+        /* cost_fn      = */ wrapped_cost_fn,
+        /* mutate_fns   = */ mutate_fns);
 
-            if (current_cost < best_cost) {
-                best_tree = current_tree;
-                best_cost = current_cost;
-            }
-        }
-
-        temperature *= cooling_rate;
-        iterations++;
-    }
+    auto const [best_tree, best_cost] = sa(initial_tree);
 
     fmt::println("Final Optimized Pauli Weight: {} \n", best_cost);
 
@@ -450,7 +428,8 @@ treespile(
     double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn,
-    bool optimize) {
+    bool optimize,
+    bool exhaustive) {
     //
     using FailReason = TreespileFailReason;
 
@@ -471,7 +450,9 @@ treespile(
 
     auto const apsp = floyd_warshall(device, cost_fn);
 
-    auto tree = build_bonsai_ternary_tree(device, apsp, n_modes);
+    auto tree = exhaustive
+                    ? build_bonsai_ternary_tree_exhaustive(device, apsp, n_modes)
+                    : build_bonsai_ternary_tree(device, apsp, n_modes);
 
     if (!tree.has_value()) {
         // NOTE: it's still possible for bonsai to fail because the device might

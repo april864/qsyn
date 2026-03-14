@@ -13,15 +13,15 @@
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"
 #include "cmd/fham_mgr.hpp"
+#include "device/device_analysis.hpp"
+#include "hamiltonian/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
+#include "hamiltonian/ternary_tree.hpp"
 #include "hamiltonian/treespile.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
-#include "hamiltonian/ternary_tree.hpp"
-#include "hamiltonian/bonsai.hpp"
-#include "device/device_analysis.hpp"
 
 using namespace dvlab::argparse;
 
@@ -80,7 +80,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             auto const* f_ham = fham_mgr.get();
 
             auto const strategy = parser.get<std::string>("--strategy");
-            bool optimize = parser.get<bool>("--optimize");
+            bool optimize       = parser.get<bool>("--optimize");
 
             QubitHamiltonian q_ham = [&]() {
                 if (strategy == "jw") {
@@ -89,7 +89,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
 
                 // strategy == "ternary_tree"
                 std::optional<TernaryTree> initial_tree = std::nullopt;
-                device::Device const* dev_ptr = nullptr;
+                device::Device const* dev_ptr           = nullptr;
 
                 if (!device_mgr.empty()) {
                     dev_ptr = device_mgr.get();
@@ -99,10 +99,10 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                         dev_ptr = nullptr;
                     } else {
                         fmt::println("Using device topology to build ternary tree.");
-                    
-                        auto apsp = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
+
+                        auto apsp        = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
                         auto tree_result = build_bonsai_ternary_tree(*dev_ptr, apsp, f_ham->n_modes());
-                        
+
                         if (tree_result.has_value()) {
                             initial_tree = std::move(tree_result.value());
                         } else {
@@ -122,7 +122,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 if (optimize) {
                     fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
                     device::Device const* dev_ptr = device_mgr.empty() ? nullptr : device_mgr.get();
-                    
+
                     tree = optimize_mapping(tree, *f_ham, dev_ptr);
                 }
                 return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});
@@ -197,6 +197,9 @@ dvlab::Command fham_treespile_cmd(
             parser.add_argument<bool>("-o", "--optimize")
                 .action(store_true)
                 .help("Run simulated annealing to minimize Pauli weight");
+            parser.add_argument<bool>("-e", "--exhaustive")
+                .action(store_true)
+                .help("Exhaustively search for the best ternary tree, stemming from all qubits");
         },
         [&](ArgumentParser const& parser) {
             if (device_mgr.empty()) {
@@ -221,12 +224,13 @@ dvlab::Command fham_treespile_cmd(
             auto const time        = parser.get<double>("time");
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
             bool optimize          = parser.get<bool>("--optimize");
+            bool exhaustive        = parser.get<bool>("--exhaustive");
             auto cost_fn           = device::default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize);
+            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize, exhaustive);
 
             if (!result.has_value()) {
                 auto const reason = result.error();
@@ -254,6 +258,26 @@ dvlab::Command fham_treespile_cmd(
             qcir_mgr.set_filename(fham_mgr.get_filename());
             qcir_mgr.add_procedures(fham_mgr.get_procedures());
             qcir_mgr.add_procedure("fham_treespile");
+
+            // go through the gates in the circuits and collect the errors of the 2-qubit gates
+            std::vector<float> two_qubit_gate_errors;
+
+            for (auto const& gate : qcir_mgr.get()->get_gates()) {
+                if (gate->get_num_qubits() == 2) {
+                    auto const& qubits    = gate->get_qubits();
+                    auto const& gate_info = device.get_gate_info(device::Device::QubitPair{qubits[0], qubits[1]});
+                    assert(!gate_info.empty());
+                    two_qubit_gate_errors.push_back(gate_info[0].error);
+                }
+            }
+
+            // report geomean error rates of the 2-qubit gates
+            float geomean_success_rate = 1.0f;
+            for (auto const& error : two_qubit_gate_errors) {
+                geomean_success_rate *= (1.0f - error);
+            }
+            geomean_success_rate = std::pow(geomean_success_rate, 1.0f / static_cast<float>(two_qubit_gate_errors.size()));
+            fmt::println("Geomean error rate of the 2-qubit gates: {}", 1.0f - geomean_success_rate);
 
             return dvlab::CmdExecResult::done;
         });
