@@ -13,15 +13,15 @@
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"
 #include "cmd/fham_mgr.hpp"
+#include "device/device_analysis.hpp"
+#include "hamiltonian/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
+#include "hamiltonian/ternary_tree.hpp"
 #include "hamiltonian/treespile.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
-#include "hamiltonian/ternary_tree.hpp"
-#include "hamiltonian/bonsai.hpp"
-#include "device/device_analysis.hpp"
 
 using namespace dvlab::argparse;
 
@@ -80,7 +80,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             auto const* f_ham = fham_mgr.get();
 
             auto const strategy = parser.get<std::string>("--strategy");
-            bool optimize = parser.get<bool>("--optimize");
+            bool optimize       = parser.get<bool>("--optimize");
 
             QubitHamiltonian q_ham = [&]() {
                 if (strategy == "jw") {
@@ -89,7 +89,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
 
                 // strategy == "ternary_tree"
                 std::optional<TernaryTree> initial_tree = std::nullopt;
-                device::Device const* dev_ptr = nullptr;
+                device::Device const* dev_ptr           = nullptr;
 
                 if (!device_mgr.empty()) {
                     dev_ptr = device_mgr.get();
@@ -99,10 +99,10 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                         dev_ptr = nullptr;
                     } else {
                         fmt::println("Using device topology to build ternary tree.");
-                    
-                        auto apsp = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
+
+                        auto apsp        = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
                         auto tree_result = build_bonsai_ternary_tree(*dev_ptr, apsp, f_ham->n_modes());
-                        
+
                         if (tree_result.has_value()) {
                             initial_tree = std::move(tree_result.value());
                         } else {
@@ -122,7 +122,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 if (optimize) {
                     fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
                     device::Device const* dev_ptr = device_mgr.empty() ? nullptr : device_mgr.get();
-                    
+
                     tree = optimize_mapping(tree, *f_ham, dev_ptr);
                 }
                 return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});

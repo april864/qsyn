@@ -9,10 +9,10 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <random>
 #include <stack>
 #include <unordered_set>
 #include <vector>
-#include <random>
 
 #include "device/device_analysis.hpp"
 #include "hamiltonian/bonsai.hpp"
@@ -353,7 +353,7 @@ void synthesize_term(
 double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham) {
     TernaryTreeMapping mapping(tt);
     QubitHamiltonian q_ham = qubitize(f_ham, mapping);
-    
+
     double total_weight = 0;
     for (const auto& term : q_ham) {
         for (size_t i = 0; i < term.n_qubits(); ++i) {
@@ -373,19 +373,18 @@ double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham)
  * @return Optimized TernaryTree mapping.
  */
 TernaryTree optimize_mapping(
-    TernaryTree initial_tree, 
-    const FermionHamiltonian& f_ham, 
+    TernaryTree initial_tree,
+    const FermionHamiltonian& f_ham,
     const qsyn::device::Device* device) {
-    
     TernaryTree current_tree = initial_tree;
-    TernaryTree best_tree = initial_tree;
+    TernaryTree best_tree    = initial_tree;
 
     double current_cost = pauli_weight_cost(current_tree, f_ham);
-    double best_cost = current_cost;
+    double best_cost    = current_cost;
 
     // Simulated annealing parameters
-    double temperature = 20.0;
-    double cooling_rate = 0.99995;
+    double temperature     = 20.0;
+    double cooling_rate    = 0.99995;
     double min_temperature = 0.3;
 
     // Used to randomly choose tree rotation
@@ -403,8 +402,10 @@ TernaryTree optimize_mapping(
         int rotation = choose_rotation(gen);
         switch (rotation) {
             case 0:
-                if (device) rotator.cp_leaf_move(&test_tree, *device);
-                else rotator.ncp_leaf_move(&test_tree);
+                if (device)
+                    rotator.cp_leaf_move(&test_tree, *device);
+                else
+                    rotator.ncp_leaf_move(&test_tree);
                 break;
             case 1:
                 rotator.root_change(&test_tree);
@@ -422,9 +423,8 @@ TernaryTree optimize_mapping(
 
         // Calculate new Pauli weight, accept if lower or by probabiltiy
         double new_cost = pauli_weight_cost(test_tree, f_ham);
-        if (new_cost < current_cost || 
+        if (new_cost < current_cost ||
             std::exp((current_cost - new_cost) / temperature) > prob_dist(gen)) {
-        
             current_tree = test_tree;
             current_cost = new_cost;
 

@@ -20,4 +20,3 @@ class QubitHamiltonian;
 std::optional<tensor::QTensor<double>> to_tensor(hamiltonian::QubitHamiltonian const& hamilt);
 
 }  // namespace qsyn
-

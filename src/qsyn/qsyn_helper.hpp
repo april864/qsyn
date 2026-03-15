@@ -11,8 +11,8 @@
 
 #include "cli/cli.hpp"
 #include "cmd/device_mgr.hpp"
-#include "cmd/qbham_mgr.hpp"
 #include "cmd/fham_mgr.hpp"
+#include "cmd/qbham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"

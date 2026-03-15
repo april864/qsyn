@@ -11,10 +11,9 @@
 #include <memory>
 #include <vector>
 
+#include "duostra/device_state.hpp"
 #include "duostra/duostra_def.hpp"
 #include "qsyn/qsyn_type.hpp"
-
-#include "duostra/device_state.hpp"
 
 namespace qsyn::duostra {
 
