@@ -29,4 +29,3 @@ inline std::string dvlab::utils::data_structure_name(
     dvlab::utils::DataStructureManager<qsyn::hamiltonian::FermionHamiltonian> const& mgr, size_t id) {
     return mgr.get_filename(id);
 }
-

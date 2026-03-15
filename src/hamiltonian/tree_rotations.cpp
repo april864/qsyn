@@ -6,19 +6,19 @@
 
 #include "tree_rotations.hpp"
 
-#include <random>
 #include <algorithm>
+#include <random>
 #include <vector>
 
 #include "hamiltonian/f2q_mappings.hpp"
-#include "hamiltonian/qubit_hamiltonian.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/qubit_hamiltonian.hpp"
 #include "hamiltonian/ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {
 
-// Non-connectivity preserving (NCP): choose a random terminal node-v with 
-// three legs and attach it to the free leg of another node-w that is neither 
+// Non-connectivity preserving (NCP): choose a random terminal node-v with
+// three legs and attach it to the free leg of another node-w that is neither
 // v nor its parent. For CP, check that this is allowed on the hardware.
 void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     if (!tt || tt->num_qubits() < 2) return;
@@ -29,8 +29,8 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
         TernaryNode* node = tt->get_node_by_index(i);
         if (node == tt->get_root()) continue;
 
-        TernaryEdge* left_edge = node->get_left();
-        TernaryEdge* mid_edge = node->get_mid();
+        TernaryEdge* left_edge  = node->get_left();
+        TernaryEdge* mid_edge   = node->get_mid();
         TernaryEdge* right_edge = node->get_right();
 
         if (left_edge && left_edge->target && left_edge->target->is_leg() &&
@@ -66,10 +66,10 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     TernaryEdge* edge_l = l->incoming_edge;
     edge_v->target.swap(edge_l->target);
 
-    v->parent = edge_l->source;
+    v->parent        = edge_l->source;
     v->incoming_edge = edge_l;
 
-    l->parent = edge_v->source;
+    l->parent        = edge_v->source;
     l->incoming_edge = edge_v;
 }
 
@@ -86,17 +86,15 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
     for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* v = tt->get_node_by_index(i);
         if (v == tt->get_root()) continue;
-        
+
         // Find v
-        auto* e_left = v->get_left();
-        auto* e_mid = v->get_mid();
+        auto* e_left  = v->get_left();
+        auto* e_mid   = v->get_mid();
         auto* e_right = v->get_right();
 
-        // ADDED: Null checks before accessing targets
         if (e_left && e_left->target && e_left->target->is_leg() &&
             e_mid && e_mid->target && e_mid->target->is_leg() &&
             e_right && e_right->target && e_right->target->is_leg()) {
-            
             auto* v_qubit = static_cast<TernaryQubitNode*>(v);
             if (!v_qubit->qubit_label.has_value()) continue;
             auto v_qindex = v_qubit->qubit_label.value();
@@ -104,14 +102,14 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
             // Find w
             for (TernaryLeg* leg : tt->get_legs()) {
                 TernaryNode* w = leg->parent;
-                
+
                 if (w != v && w != v->parent) {
                     auto* w_qubit = static_cast<TernaryQubitNode*>(w);
                     if (!w_qubit->qubit_label.has_value()) continue;
                     auto w_qindex = w_qubit->qubit_label.value();
 
                     // Check if the hardware has the necessary connection
-                    if (device.is_adjacent(v_qindex, w_qindex) || 
+                    if (device.is_adjacent(v_qindex, w_qindex) ||
                         device.is_adjacent(w_qindex, v_qindex)) {
                         candidates.push_back({v, leg});
                     }
@@ -125,27 +123,27 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
-    
+
     CandidatePair move_pair = candidates[dist(gen)];
-    TernaryNode* v = move_pair.v;
-    TernaryLeg* l = move_pair.leg;
+    TernaryNode* v          = move_pair.v;
+    TernaryLeg* l           = move_pair.leg;
 
     // Do the swap
     TernaryEdge* edge_v = v->incoming_edge;
     TernaryEdge* edge_l = l->incoming_edge;
-    
+
     edge_v->target.swap(edge_l->target);
 
-    v->parent = edge_l->source;
+    v->parent        = edge_l->source;
     v->incoming_edge = edge_l;
 
-    l->parent = edge_v->source;
+    l->parent        = edge_v->source;
     l->incoming_edge = edge_v;
 }
 
-// A node v different from the root with out-degree at most 2 is chosen 
-// as a new root. The path from root to v is identified, and the tree is 
-// updated so that child and parent designations are swapped along the path. 
+// A node v different from the root with out-degree at most 2 is chosen
+// as a new root. The path from root to v is identified, and the tree is
+// updated so that child and parent designations are swapped along the path.
 void TreeRotator::root_change(TernaryTree* tt) {
     if (!tt || tt->num_qubits() < 2) return;
 
@@ -154,7 +152,7 @@ void TreeRotator::root_change(TernaryTree* tt) {
     for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* node = tt->get_node_by_index(i);
         if (node == tt->get_root()) continue;
-        
+
         bool has_leg = false;
         for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
             TernaryEdge* edge = node->get_edge(b);
@@ -163,7 +161,9 @@ void TreeRotator::root_change(TernaryTree* tt) {
                 break;
             }
         }
-        if (has_leg) { candidate_roots.push_back(node); }
+        if (has_leg) {
+            candidate_roots.push_back(node);
+        }
     }
     if (candidate_roots.empty()) return;
 
@@ -183,7 +183,7 @@ void TreeRotator::root_change(TernaryTree* tt) {
     }
     std::uniform_int_distribution<size_t> dist_leg(0, candidate_edges.size() - 1);
     TernaryEdge* leg_edge = candidate_edges[dist_leg(gen)];
-    TernaryNode* leg = leg_edge->target.get();
+    TernaryNode* leg      = leg_edge->target.get();
 
     // Get path from old root to new root
     std::vector<TernaryNode*> path_nodes;
@@ -194,7 +194,7 @@ void TreeRotator::root_change(TernaryTree* tt) {
     }
     std::reverse(path_nodes.begin(), path_nodes.end());
     // path_nodes: [n0, n1, ..., nk] where n0 is old root and nk is new root
-    
+
     size_t k = path_nodes.size() - 1;
     if (k == 0) return;
     std::vector<TernaryEdge*> path_edges;
@@ -212,24 +212,24 @@ void TreeRotator::root_change(TernaryTree* tt) {
     std::unique_ptr<TernaryNode> leg_ptr = std::move(leg_edge->target);
 
     // Reverse edge targets
-    tt->get_root_ptr() = std::move(node_ptrs.back()); // assigns new root
-    leg_edge->target = std::move(k > 1 ? node_ptrs[k-2] : root_ptr); // edge to previously chosen leg points to next node
-    
+    tt->get_root_ptr() = std::move(node_ptrs.back());                     // assigns new root
+    leg_edge->target   = std::move(k > 1 ? node_ptrs[k - 2] : root_ptr);  // edge to previously chosen leg points to next node
+
     for (size_t i = k - 1; i >= 1; --i) {
-        path_edges[i]->target = std::move(i == 1 ? root_ptr : node_ptrs[i-2]);
+        path_edges[i]->target = std::move(i == 1 ? root_ptr : node_ptrs[i - 2]);
     }
-    path_edges[0]->target = std::move(leg_ptr); // previous edge to new root points to leg
+    path_edges[0]->target = std::move(leg_ptr);  // previous edge to new root points to leg
 
     // Update parent and incoming_edge pointers
-    leg->parent = path_nodes[0];
+    leg->parent        = path_nodes[0];
     leg->incoming_edge = path_edges[0];
 
     for (size_t i = 0; i < k; ++i) {
-        path_nodes[i]->parent = path_nodes[i+1];
-        path_nodes[i]->incoming_edge = (i == k - 1) ? leg_edge : path_edges[i+1];
+        path_nodes[i]->parent        = path_nodes[i + 1];
+        path_nodes[i]->incoming_edge = (i == k - 1) ? leg_edge : path_edges[i + 1];
     }
 
-    path_nodes[k]->parent = nullptr;
+    path_nodes[k]->parent        = nullptr;
     path_nodes[k]->incoming_edge = nullptr;
 }
 
@@ -242,7 +242,7 @@ void TreeRotator::pauli_shuffle(TernaryTree* tt) {
     std::vector<TernaryNode*> candidate_nodes;
     for (size_t i = 0; i < tt->num_qubits(); ++i) {
         TernaryNode* node = tt->get_node_by_index(i);
-        
+
         int out_degree = 0;
         for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
             TernaryEdge* edge = node->get_edge(b);
@@ -278,14 +278,14 @@ void TreeRotator::pauli_shuffle(TernaryTree* tt) {
         if (edge_ptr) {
             edge_ptr->branch = new_branch;
         }
-        
+
         v->set_edge(new_branch, std::move(edge_ptr));
         branch_idx++;
     }
 }
 
 // For nodes with labels (i, u, b) and (i', u', b') the labels are changed to
-// (i', u, b) and (i, u', b') respectively. 
+// (i', u, b) and (i, u', b') respectively.
 void TreeRotator::mode_association_swap(TernaryTree* tt) {
     if (!tt || tt->num_qubits() < 2) return;
 
@@ -294,7 +294,7 @@ void TreeRotator::mode_association_swap(TernaryTree* tt) {
     std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> dist(0, tt->num_qubits() - 1);
 
-    size_t i = dist(gen);
+    size_t i       = dist(gen);
     size_t i_prime = dist(gen);
 
     // don't pick same node twice
@@ -319,8 +319,8 @@ void TreeRotator::majorana_braiding_change(TernaryTree* tt) {
 
     // Change braiding flag
     TernaryNode* node = tt->get_node_by_index(index);
-    auto* qubit = static_cast<TernaryQubitNode*>(node);
+    auto* qubit       = static_cast<TernaryQubitNode*>(node);
     qubit->is_braided = !qubit->is_braided;
 }
 
-} // namespace
+}  // namespace qsyn::hamiltonian
