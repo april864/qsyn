@@ -17,9 +17,10 @@
 
 namespace qsyn::hamiltonian {
 
-// Non-connectivity preserving (NCP): choose a random terminal node-v with
+// For non-connectivity preserving (NCP), choose a random terminal node-v with
 // three legs and attach it to the free leg of another node-w that is neither
-// v nor its parent. For CP, check that this is allowed on the hardware.
+// v nor its parent. For CP random leaf move, choose random move that preserves
+// connectivity. For CP leaf move, choose moves more likely to improve error.
 void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     if (!tt || tt->num_qubits() < 2) return;
 
@@ -73,7 +74,7 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
     l->incoming_edge = edge_v;
 }
 
-void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& device) {
+void TreeRotator::cp_random_leaf_move(TernaryTree* tt, qsyn::device::Device const& device) {
     if (!tt || tt->num_qubits() < 2) return;
 
     struct CandidatePair {
@@ -95,7 +96,8 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
         if (e_left && e_left->target && e_left->target->is_leg() &&
             e_mid && e_mid->target && e_mid->target->is_leg() &&
             e_right && e_right->target && e_right->target->is_leg()) {
-            auto* v_qubit = static_cast<TernaryQubitNode*>(v);
+            
+                auto* v_qubit = static_cast<TernaryQubitNode*>(v);
             if (!v_qubit->qubit_label.has_value()) continue;
             auto v_qindex = v_qubit->qubit_label.value();
 
@@ -139,6 +141,89 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
 
     l->parent        = edge_v->source;
     l->incoming_edge = edge_v;
+}
+
+void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& device) {
+    if (!tt || tt->num_qubits() < 2) return;
+
+    struct CandidatePair { 
+        TernaryNode* v; 
+        TernaryLeg* leg; 
+    };
+    std::vector<CandidatePair> candidates;
+    
+    std::vector<double> weights; // weight: error of old connection/error of new connection
+
+    // Lambda func to get error rate of a connection
+    auto get_error = [&device](size_t q1, size_t q2) -> float {
+        if (device.is_adjacent(q1, q2)) return device.get_gate_info(qsyn::device::Device::QubitPair{q1, q2})[0].error;
+        if (device.is_adjacent(q2, q1)) return device.get_gate_info(qsyn::device::Device::QubitPair{q2, q1})[0].error;
+        return 1.0f;
+    };
+
+    // Find all valid node and leg combinations
+    for (size_t i = 0; i < tt->num_qubits(); ++i) {
+        TernaryNode* v = tt->get_node_by_index(i);
+        if (v == tt->get_root()) continue;
+        
+        // Find v
+        auto* e_left = v->get_left();
+        auto* e_mid = v->get_mid();
+        auto* e_right = v->get_right();
+
+        if (e_left && e_left->target && e_left->target->is_leg() &&
+            e_mid && e_mid->target && e_mid->target->is_leg() &&
+            e_right && e_right->target && e_right->target->is_leg()) {
+            
+            auto* v_qubit = static_cast<TernaryQubitNode*>(v);
+            if (!v_qubit->qubit_label.has_value()) continue;
+            auto v_qindex = v_qubit->qubit_label.value();
+
+            // Calculate error of v's current physical connection
+            float old_error = 1.0f;
+            auto* parent_qubit = dynamic_cast<TernaryQubitNode*>(v->parent);
+            if (parent_qubit && parent_qubit->qubit_label.has_value()) {
+                old_error = get_error(v_qindex, parent_qubit->qubit_label.value());
+            }
+
+            // Find w
+            for (TernaryLeg* leg : tt->get_legs()) {
+                TernaryNode* w = leg->parent;
+
+                if (w != v && w != v->parent) {
+                    auto* w_qubit = static_cast<TernaryQubitNode*>(w);
+                    if (!w_qubit->qubit_label.has_value()) continue;
+                    auto w_qindex = w_qubit->qubit_label.value();
+
+                    // Check if the hardware has the necessary connection
+                    if (device.is_adjacent(v_qindex, w_qindex) || device.is_adjacent(w_qindex, v_qindex)) {
+                        candidates.push_back({v, leg});
+                        
+                        // Calculate weight of the move
+                        float new_error = get_error(v_qindex, w_qindex);
+                        double weight = static_cast<double>(old_error) / (static_cast<double>(new_error) + 1e-6); // Added 1e-6 to prevent division by 0 error
+                        weights.push_back(weight);
+                    }
+                }
+            }
+        }
+    }
+    if (candidates.empty()) return;
+
+    // Choose a pair to apply leaf move to
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<size_t> dist(weights.begin(), weights.end());
+    
+    CandidatePair move_pair = candidates[dist(gen)];
+    TernaryEdge* edge_v = move_pair.v->incoming_edge;
+    TernaryEdge* edge_l = move_pair.leg->incoming_edge;
+    
+    edge_v->target.swap(edge_l->target);
+    move_pair.v->parent = edge_l->source;
+    move_pair.v->incoming_edge = edge_l;
+    move_pair.leg->parent = edge_v->source;
+    move_pair.leg->incoming_edge = edge_v;
 }
 
 // A node v different from the root with out-degree at most 2 is chosen
