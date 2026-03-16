@@ -16,8 +16,10 @@ class TreeRotator {
 public:
     // For non-connectivity preserving (NCP), choose a random terminal node-v with
     // three legs and attach it to the free leg of another node-w that is neither
-    // v nor its parent.
+    // v nor its parent. For CP random leaf move, choose random move that preserves
+    // connectivity. For CP leaf move, choose moves more likely to improve error.
     void ncp_leaf_move(TernaryTree* tt);
+    void cp_random_leaf_move(TernaryTree* tt, qsyn::device::Device const& device);
     void cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& device);
     // A node v different from the root with out-degree at most 2 is chosen
     // as a new root. The path from root to v is identified, and the tree is
