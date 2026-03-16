@@ -24,8 +24,8 @@ class tqdm;  // NOLINT(readability-identifier-naming)  // forward declaration
 namespace dvlab {
 namespace detail {
 void dvlab_assert_impl(std::string_view expr_str, bool expr, std::string_view file, int line, std::string_view msg);
-void dvlab_abort_impl(std::string_view file, int line, std::string_view msg);
-void dvlab_unreachable_impl(std::string_view file, int line, std::string_view msg);
+[[noreturn]] void dvlab_abort_impl(std::string_view file, int line, std::string_view msg);
+[[noreturn]] void dvlab_unreachable_impl(std::string_view file, int line, std::string_view msg);
 }  // namespace detail
 
 namespace utils {
