@@ -28,4 +28,3 @@ bool add_fham_cmds(
     device::DeviceMgr& device_mgr);
 
 }  // namespace qsyn::hamiltonian
-

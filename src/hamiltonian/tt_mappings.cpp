@@ -104,19 +104,21 @@ void TTMapper::_load_ferm_ops() {
 
         FermionOps ops;
         if (!qubit_node->is_braided) {
-            // a_j^ = 0.5 Sx - 0.5i Sy
+            // Bonsai: a_j^ = 0.5 Sx - 0.5i Sy
+            // Treespilation (USE THIS ONE): a_j^ = 0.5 Sx + 0.5i Sy
             ops.creation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
-                            ComplexPauliTerm(right_str, std::complex<double>(0, -0.5))};
-            // a_j = 0.5 Sx + 0.5i Sy
+                            ComplexPauliTerm(right_str, std::complex<double>(0, 0.5))};
+            // Bonsai: a_j = 0.5 Sx + 0.5i Sy
+            // Treespilation (USE THIS ONE): a_j = 0.5 Sx - 0.5i Sy
             ops.annihilation = {ComplexPauliTerm(left_str, std::complex<double>(0.5, 0)),
-                                ComplexPauliTerm(right_str, std::complex<double>(0, 0.5))};
+                                ComplexPauliTerm(right_str, std::complex<double>(0, -0.5))};
         } else {
-            // a_j^ = 0.5 Sy + 0.5i Sx
+            // a_j^ = -0.5 Sy + 0.5i Sx
             ops.creation = {ComplexPauliTerm(left_str, std::complex<double>(0, 0.5)),
-                            ComplexPauliTerm(right_str, std::complex<double>(0.5, 0))};
-            // a_j = 0.5 Sy - 0.5i Sx
+                            ComplexPauliTerm(right_str, std::complex<double>(-0.5, 0))};
+            // a_j = -0.5 Sy - 0.5i Sx
             ops.annihilation = {ComplexPauliTerm(left_str, std::complex<double>(0, -0.5)),
-                                ComplexPauliTerm(right_str, std::complex<double>(0.5, 0))};
+                                ComplexPauliTerm(right_str, std::complex<double>(-0.5, 0))};
         }
 
         _mode_to_ferm_ops.emplace(i, std::move(ops));

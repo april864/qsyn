@@ -385,27 +385,26 @@ TernaryTree optimize_mapping(
     using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
 
     auto const mutate_fns = std::vector<MutateFn>{
-        {
-            [&](TernaryTree& tree) {
-                if (device) {
-                    rotator.cp_leaf_move(&tree, *device);
-                } else {
-                    rotator.ncp_leaf_move(&tree);
-                }
-            },
-            [&](TernaryTree& tree) {
-                rotator.root_change(&tree);
-            },
-            [&](TernaryTree& tree) {
-                rotator.pauli_shuffle(&tree);
-            },
-            [&](TernaryTree& tree) {
-                rotator.mode_association_swap(&tree);
-            },
-            [&](TernaryTree& tree) {
-                rotator.majorana_braiding_change(&tree);
-            },
-        }};
+        [&](TernaryTree& tree) {
+            if (device) {
+                rotator.cp_leaf_move(&tree, *device);
+            } else {
+                rotator.ncp_leaf_move(&tree);
+            }
+        },
+        [&](TernaryTree& tree) {
+            rotator.root_change(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.pauli_shuffle(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.mode_association_swap(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.majorana_braiding_change(&tree);
+        },
+    };
 
     auto const sa = SimulatedAnnealing<TernaryTree, double>(
         /* init_temp    = */ 20.0,

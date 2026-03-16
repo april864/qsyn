@@ -7,11 +7,11 @@
 #pragma once
 
 #include "cli/cli.hpp"
+#include "cmd/qbham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
 #include "cmd/tensor_mgr.hpp"
 #include "cmd/zxgraph_mgr.hpp"
-#include "cmd/qbham_mgr.hpp"
 
 namespace qsyn {
 
