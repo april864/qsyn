@@ -32,3 +32,6 @@ perf.data.old
 .venv/
 .env
 __pycache__/
+
+# cursor configs
+.cursor/

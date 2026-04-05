@@ -152,8 +152,11 @@ dvlab::Command fham_print_cmd(FermionHamiltonianMgr const& fham_mgr) {
         "print",
         [](ArgumentParser& parser) {
             parser.description("Print the focused fermionic Hamiltonian");
+            parser.add_argument<bool>("-v", "--verbose")
+                .action(store_true)
+                .help("display each term of the hamiltonian");
         },
-        [&](ArgumentParser const& /*parser*/) {
+        [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(fham_mgr)) {
                 return dvlab::CmdExecResult::error;
             }
@@ -163,6 +166,9 @@ dvlab::Command fham_print_cmd(FermionHamiltonianMgr const& fham_mgr) {
                          f_ham->n_modes(),
                          f_ham->get_terms().size());
 
+            if (!parser.parsed("--verbose")) {
+                return dvlab::CmdExecResult::done;
+            }
             auto const& terms = f_ham->get_terms();
             for (std::size_t i = 0; i < terms.size(); ++i) {
                 auto const& [coeff, ops] = terms[i];

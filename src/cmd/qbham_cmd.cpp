@@ -30,16 +30,34 @@ dvlab::Command qbham_print_cmd(QubitHamiltonianMgr const& qbham_mgr) {
         "print",
         [](ArgumentParser& parser) {
             parser.description("Print the hamiltonian");
+
+            parser.add_argument<bool>("-v", "--verbose")
+                .action(store_true)
+                .help("display each term of the hamiltonian");
         },
-        [&](ArgumentParser const& /* parser */) {
+        [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(qbham_mgr)) {
                 return dvlab::CmdExecResult::error;
             }
 
-            fmt::println("Qubit Hamiltonian ({} qubits, {} terms)",
+            auto const* qbham = qbham_mgr.get();
+            size_t tpw        = 0;
+
+            for (auto const& term : *qbham) {
+                for (size_t i = 0; i < term.n_qubits(); ++i) {
+                    if (!term.is_i(i)) {
+                        tpw++;
+                    }
+                }
+            }
+
+            fmt::println("Qubit Hamiltonian ({} qubits, {} terms, weight = {})",
                          qbham_mgr.get()->n_qubits(),
-                         qbham_mgr.get()->n_terms());
-            fmt::println("{}", qbham_mgr.get()->to_string());
+                         qbham_mgr.get()->n_terms(),
+                         tpw);
+            if (parser.parsed("--verbose")) {
+                fmt::println("{}", qbham_mgr.get()->to_string());
+            }
 
             return dvlab::CmdExecResult::done;
         }};
