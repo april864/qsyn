@@ -23,13 +23,6 @@ enum class TreespileFailReason : uint8_t {
     tt_build_failed_not_enough_qubits,
 };
 
-double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham);
-
-TernaryTree optimize_mapping(
-    TernaryTree const& initial_tree,
-    const FermionHamiltonian& f_ham,
-    const qsyn::device::Device* device = nullptr);
-
 tl::expected<qcir::QCir, TreespileFailReason>
 treespile(
     FermionHamiltonian const& hamiltonian,

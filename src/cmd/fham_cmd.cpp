@@ -14,12 +14,13 @@
 #include "cmd/device_mgr.hpp"
 #include "cmd/fham_mgr.hpp"
 #include "device/device_analysis.hpp"
-#include "hamiltonian/bonsai.hpp"
+#include "hamiltonian/ternarytree/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
-#include "hamiltonian/ternary_tree.hpp"
-#include "hamiltonian/treespile.hpp"
+#include "hamiltonian/ternarytree/ternary_tree.hpp"
+#include "hamiltonian/ternarytree/treespile.hpp"
+#include "hamiltonian/ternarytree/tree_optimizations.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 
@@ -120,10 +121,12 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 TernaryTree tree = std::move(initial_tree.value());
 
                 if (optimize) {
-                    fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
+                    // fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
+                    fmt::println("Optimizing ternary tree mapping to minimize proxy CNOT count...");
                     device::Device const* dev_ptr = device_mgr.empty() ? nullptr : device_mgr.get();
 
-                    tree = optimize_mapping(tree, *f_ham, dev_ptr);
+                    // tree = pauli_weight_optimize_mapping(tree, *f_ham, dev_ptr);
+                    tree = cnot_proxy_optimize_mapping(tree, *f_ham, dev_ptr);
                 }
                 return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});
             }();
