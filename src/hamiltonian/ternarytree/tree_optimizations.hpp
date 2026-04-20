@@ -15,6 +15,7 @@ namespace qsyn::hamiltonian {
 
 double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham);
 
+// Oracle for computing tree distances and tail weights for fast_tree_cost.
 class TreeOracle {
 public:
     TreeOracle(const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp);
@@ -38,6 +39,7 @@ private:
       BranchType initial_branch);
 };
 
+// Approximates CNOT count for qubit interactions in f_ham
 double fast_tree_cost(const FermionHamiltonian& f_ham, const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp);
 
 TernaryTree pauli_weight_optimize_mapping(

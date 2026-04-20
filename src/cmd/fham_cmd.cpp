@@ -69,9 +69,13 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 .constraint(choices_allow_prefix({"jw", "ternary_tree"}))
                 .help("Fermion-to-qubit mapping strategy: 'jw' (Jordan-Wigner, default) or 'ternary_tree'");
 
-            parser.add_argument<bool>("-o", "--optimize")
+            parser.add_argument<bool>("-o1", "--optimize1")
                 .action(store_true)
                 .help("Run simulated annealing to minimize Pauli weight (only applies to ternary_tree strategy)");
+
+            parser.add_argument<bool>("-o2", "--optimize2")
+                .action(store_true)
+                .help("Run simulated annealing to minimize proxy CNOT count (only applies to ternary_tree strategy)");
         },
         [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(fham_mgr)) {
@@ -81,7 +85,8 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             auto const* f_ham = fham_mgr.get();
 
             auto const strategy = parser.get<std::string>("--strategy");
-            bool optimize       = parser.get<bool>("--optimize");
+            bool optimize1       = parser.get<bool>("--optimize1");
+            bool optimize2       = parser.get<bool>("--optimize2");
 
             QubitHamiltonian q_ham = [&]() {
                 if (strategy == "jw") {
@@ -120,14 +125,20 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 }
                 TernaryTree tree = std::move(initial_tree.value());
 
-                if (optimize) {
-                    // fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
-                    fmt::println("Optimizing ternary tree mapping to minimize proxy CNOT count...");
-                    device::Device const* dev_ptr = device_mgr.empty() ? nullptr : device_mgr.get();
+                if (optimize1 || optimize2) {
+                    if (optimize1 && optimize2) {
+                        fmt::println("Warning: Both -o1 and -o2 specified. Defaulting to -o2 (CNOT proxy count).");
+                    }
 
-                    // tree = pauli_weight_optimize_mapping(tree, *f_ham, dev_ptr);
-                    tree = cnot_proxy_optimize_mapping(tree, *f_ham, dev_ptr);
+                    if (optimize2) {
+                        fmt::println("Optimizing ternary tree mapping to minimize proxy CNOT count...");
+                        tree = cnot_proxy_optimize_mapping(tree, *f_ham, dev_ptr);
+                    } else if (optimize1) {
+                        fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
+                        tree = pauli_weight_optimize_mapping(tree, *f_ham, dev_ptr);
+                    }
                 }
+
                 return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});
             }();
 
@@ -137,7 +148,7 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
             qbham_mgr.add_procedures(fham_mgr.get_procedures());
 
             std::string proc_name = strategy == "ternary_tree" ? "fham_qubitize_ternary_tree" : "fham_qubitize_jw";
-            if (strategy == "ternary_tree" && optimize) proc_name += "_optimized";
+            if ((strategy == "ternary_tree" && optimize1) || (strategy == "ternary_tree" && optimize2)) proc_name += "_optimized";
             qbham_mgr.add_procedure(proc_name);
 
             fmt::println("Transformed focused fermionic Hamiltonian to QubitHamiltonian with ID: {}", id);
@@ -197,9 +208,12 @@ dvlab::Command fham_treespile_cmd(
                 .constraint(choices_allow_prefix({"log_success_rate", "default"}))
                 .default_value("default")
                 .help("cost function for Floyd-Warshall used inside treespile");
-            parser.add_argument<bool>("-o", "--optimize")
+            parser.add_argument<bool>("-o1", "--optimize1")
                 .action(store_true)
-                .help("Run simulated annealing to minimize Pauli weight");
+                .help("Run simulated annealing to optimize tree for Pauli weight");
+            parser.add_argument<bool>("-o2", "--optimize2")
+                .action(store_true)
+                .help("Run simulated annealing to optimize tree for proxy CNOT count (requires device)");
             parser.add_argument<bool>("-e", "--exhaustive")
                 .action(store_true)
                 .help("Exhaustively search for the best ternary tree, stemming from all qubits");
@@ -226,14 +240,15 @@ dvlab::Command fham_treespile_cmd(
 
             auto const time        = parser.get<double>("time");
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
-            bool optimize          = parser.get<bool>("--optimize");
+            bool optimize1          = parser.get<bool>("--optimize1");
+            bool optimize2          = parser.get<bool>("--optimize2");
             bool exhaustive        = parser.get<bool>("--exhaustive");
             auto cost_fn           = device::default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize, exhaustive);
+            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize1, optimize2, exhaustive);
 
             if (!result.has_value()) {
                 auto const reason = result.error();

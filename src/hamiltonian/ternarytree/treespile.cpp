@@ -359,7 +359,8 @@ treespile(
     double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn,
-    bool optimize,
+    bool optimize1,
+    bool optimize2,
     bool exhaustive) {
     //
     using FailReason = TreespileFailReason;
@@ -391,8 +392,9 @@ treespile(
         return tl::unexpected(FailReason::tt_build_failed_not_enough_qubits);
     }
 
-    if (optimize) {
-        // tree = pauli_weight_optimize_mapping(*tree, hamiltonian, &device);
+    if (optimize1) {
+        tree = pauli_weight_optimize_mapping(*tree, hamiltonian, &device);
+    } else if (optimize2) {
         tree = cnot_proxy_optimize_mapping(*tree, hamiltonian, &device);
     }
 
