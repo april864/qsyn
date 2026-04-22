@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "qubit_hamiltonian.hpp"
+#include "hamiltonian/qubit_hamiltonian.hpp"
 #include "ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {

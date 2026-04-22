@@ -8,7 +8,7 @@
 
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
-#include "hamiltonian/tt_mappings.hpp"
+#include "ternarytree/tt_mappings.hpp"
 #include "tableau/pauli_rotation.hpp"
 
 namespace qsyn::hamiltonian {

@@ -4,7 +4,7 @@
   Author       [ Mu-Te (Joshua) Lau (joshmtlau) ]
 */
 
-#include "hamiltonian/treespile.hpp"
+#include "./treespile.hpp"
 
 #include <fmt/format.h>
 
@@ -14,13 +14,14 @@
 #include <vector>
 
 #include "device/device_analysis.hpp"
-#include "hamiltonian/bonsai.hpp"
+#include "./bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
-#include "hamiltonian/ternary_tree.hpp"
-#include "hamiltonian/tree_rotations.hpp"
+#include "./ternary_tree.hpp"
+#include "./tree_rotations.hpp"
 #include "qcir/basic_gate_type.hpp"
 #include "util/graph/minimum_spanning_arborescence.hpp"
 #include "util/simulated_annealing.hpp"
+#include "tree_optimizations.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -351,75 +352,6 @@ void synthesize_term(
 
 }  // namespace
 
-double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham) {
-    TernaryTreeMapping mapping(tt);
-    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
-
-    double total_weight = 0;
-    for (const auto& term : q_ham) {
-        for (size_t i = 0; i < term.n_qubits(); ++i) {
-            if (!term.is_i(i)) {
-                total_weight += 1.0;
-            }
-        }
-    }
-    return total_weight;
-}
-
-/**
- * @brief Optimizes a fermion-to-qubit mapping to minimize Pauli weight.
- * @param initial_tree Initital mapping.
- * @param f_ham Fermionic Hamiltonian to be mapped.
- * @param device (Optional) Hardware device.
- * @return Optimized TernaryTree mapping.
- */
-TernaryTree optimize_mapping(
-    TernaryTree const& initial_tree,
-    const FermionHamiltonian& f_ham,
-    const qsyn::device::Device* device) {
-    using util::SimulatedAnnealing;
-    auto const wrapped_cost_fn =
-        [&](TernaryTree const& tree) { return pauli_weight_cost(tree, f_ham); };
-    TreeRotator rotator;
-
-    using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
-
-    auto const mutate_fns = std::vector<MutateFn>{
-        [&](TernaryTree& tree) {
-            if (device) {
-                rotator.cp_leaf_move(&tree, *device);
-            } else {
-                rotator.ncp_leaf_move(&tree);
-            }
-        },
-        [&](TernaryTree& tree) {
-            rotator.root_change(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.pauli_shuffle(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.mode_association_swap(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.majorana_braiding_change(&tree);
-        },
-    };
-
-    auto const sa = SimulatedAnnealing<TernaryTree, double>(
-        /* init_temp    = */ 20.0,
-        /* cooling_rate = */ 0.99995,
-        /* min_temp     = */ 0.3,
-        /* cost_fn      = */ wrapped_cost_fn,
-        /* mutate_fns   = */ mutate_fns);
-
-    auto const [best_tree, best_cost] = sa(initial_tree);
-
-    fmt::println("Final Optimized Pauli Weight: {} \n", best_cost);
-
-    return best_tree;
-}
-
 tl::expected<qcir::QCir, TreespileFailReason>
 treespile(
     FermionHamiltonian const& hamiltonian,
@@ -427,7 +359,8 @@ treespile(
     double time,
     size_t n_trotterization_steps,
     device::APSPCostFnType const& cost_fn,
-    bool optimize,
+    bool optimize1,
+    bool optimize2,
     bool exhaustive) {
     //
     using FailReason = TreespileFailReason;
@@ -459,8 +392,10 @@ treespile(
         return tl::unexpected(FailReason::tt_build_failed_not_enough_qubits);
     }
 
-    if (optimize) {
-        tree = optimize_mapping(*tree, hamiltonian, &device);
+    if (optimize1) {
+        tree = pauli_weight_optimize_mapping(*tree, hamiltonian, &device);
+    } else if (optimize2) {
+        tree = cnot_proxy_optimize_mapping(*tree, hamiltonian, &device);
     }
 
     auto const mapping = TernaryTreeMapping(tree.value());

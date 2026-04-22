@@ -2,7 +2,7 @@
   Unit tests for TernaryTree (ternary tree structure used in Hamiltonian handling).
 */
 
-#include "hamiltonian/ternary_tree.hpp"
+#include "hamiltonian/ternarytree/ternary_tree.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

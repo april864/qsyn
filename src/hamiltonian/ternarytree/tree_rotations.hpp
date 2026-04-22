@@ -7,7 +7,7 @@
 #pragma once
 
 #include "device/device.hpp"
-#include "fermionic_hamiltonian.hpp"
+#include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {
