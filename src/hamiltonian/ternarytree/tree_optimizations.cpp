@@ -159,24 +159,51 @@ double TreeOracle::get_subtree_weight(const std::vector<size_t>& nodes) const {
     return total_weight / 2.0;
 }
 
+// // OLD
+// double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
+//     TreeOracle oracle(tree, apsp);
+//     double total_cost = 0.0;
+
+//     for (const auto& term : f_ham.get_terms()) {
+//         std::vector<size_t> active_modes;
+//         for (const auto& op : term.second) {
+//           active_modes.push_back(op.first);
+//         }
+
+//         std::sort(active_modes.begin(), active_modes.end());
+//         active_modes.erase(std::unique(active_modes.begin(), active_modes.end()), active_modes.end());
+
+//         total_cost += oracle.get_subtree_weight(active_modes);
+//         for (size_t mode : active_modes) {
+//             total_cost += oracle.get_tail_weight(mode);
+//         }
+//     }
+//     return total_cost;
+// }
+
+// NEW: qubitizes first to cancel tails
 double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
     TreeOracle oracle(tree, apsp);
     double total_cost = 0.0;
 
-    for (const auto& term : f_ham.get_terms()) {
-        std::vector<size_t> active_modes;
-        for (const auto& op : term.second) {
-            active_modes.push_back(op.first);
-        }
+    TernaryTreeMapping mapping(tree);
+    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
 
-        std::sort(active_modes.begin(), active_modes.end());
-        active_modes.erase(std::unique(active_modes.begin(), active_modes.end()), active_modes.end());
-
-        total_cost += oracle.get_subtree_weight(active_modes);
-        for (size_t mode : active_modes) {
-            total_cost += oracle.get_tail_weight(mode);
+    for (const auto& term : q_ham) {
+        std::vector<size_t> active_nodes;
+        for (size_t i = 0; i < term.n_qubits(); ++i) {
+            if (!term.is_i(i)) {
+                active_nodes.push_back(i);
+            }
         }
+        
+        total_cost += oracle.get_subtree_weight(active_nodes);
+
+        // for (size_t node : active_nodes) { // inaccurate
+        //     total_cost += oracle.get_tail_weight(node);
+        // }
     }
+    
     return total_cost;
 }
 

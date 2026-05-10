@@ -547,6 +547,36 @@ dvlab::Command fham_treespile_cmd(
         });
 }
 
+// NEW
+dvlab::Command fham_eval_cmd(
+    device::DeviceMgr& device_mgr,
+    FermionHamiltonianMgr& fham_mgr) {
+    return dvlab::Command(
+        "eval-proxy",
+        [](ArgumentParser& parser) {
+            parser.description("Evaluate the CNOT proxy cost function by generating random tree mappings.");
+            parser.add_argument<size_t>("-s", "--samples")
+                .default_value(10)
+                .help("Number of random trees to sample");
+            parser.add_argument<std::string>("-o", "--output")
+                .default_value("proxy_evaluation.csv")
+                .help("Output CSV file name");
+        },
+        [&](ArgumentParser const& parser) {
+            if (device_mgr.empty() || !dvlab::utils::mgr_has_data(fham_mgr)) {
+                spdlog::error("Please load a device and a fermionic Hamiltonian first.");
+                return dvlab::CmdExecResult::error;
+            }
+            evaluate_proxy_cost(
+                *fham_mgr.get(),
+                *device_mgr.get(),
+                parser.get<std::string>("--output"),
+                parser.get<size_t>("--samples")
+            );
+            return dvlab::CmdExecResult::done;
+        });
+}
+
 }  // namespace
 
 dvlab::Command fham_cmd(
@@ -565,6 +595,7 @@ dvlab::Command fham_cmd(
     cmd.add_subcommand("fham-cmd-group", fham_bonsai_cmd(device_mgr, fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_treespile_cmd(device_mgr, fham_mgr, qcir_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_print_cmd(fham_mgr));
+    cmd.add_subcommand("fham-cmd-group", fham_eval_cmd(device_mgr, fham_mgr)); // NEW
 
     return cmd;
 }

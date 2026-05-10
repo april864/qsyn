@@ -52,4 +52,11 @@ treespile(
     bool exhaustive                       = false,
     bool use_logical_indices              = false);
 
+// NEW
+void evaluate_proxy_cost(
+    FermionHamiltonian const& hamiltonian,
+    device::Device const& device,
+    std::string const& output_csv,
+    size_t samples);
+
 }  // namespace qsyn::hamiltonian

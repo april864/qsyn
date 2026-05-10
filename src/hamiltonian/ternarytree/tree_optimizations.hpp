@@ -40,7 +40,7 @@ private:
 };
 
 // Approximates CNOT count for qubit interactions in f_ham
-double fast_tree_cost(const FermionHamiltonian& f_ham, const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp);
+double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp);
 
 TernaryTree pauli_weight_optimize_mapping(
     TernaryTree const& initial_tree,

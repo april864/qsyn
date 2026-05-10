@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <fstream>
+#include <random>
 
 #include "device/device_analysis.hpp"
 #include "./bonsai.hpp"
@@ -494,6 +496,75 @@ treespile(
     result.physical_qubits = use_logical_indices ? layout->physical_qubits : std::vector<size_t>{};
     result.encoding        = std::make_unique<TernaryTreeMapping>(std::move(tree.value()));
     return result;
+}
+
+
+// NEW
+void evaluate_proxy_cost(
+    FermionHamiltonian const& hamiltonian,
+    device::Device const& device,
+    std::string const& output_csv,
+    size_t samples) {
+
+    auto const apsp = floyd_warshall(device, device::default_floyd_warshall_cost);
+
+    std::ofstream csv(output_csv, std::ios::app);
+    
+    // Seed randomizer
+    std::random_device rd;
+    std::mt19937 rng(rd());
+
+    for (size_t i = 0; i < samples; ++i) {
+        fmt::println("Starting tree {}", i);
+        auto base_tree = build_bonsai_ternary_tree(device, apsp, hamiltonian.n_modes());
+        if (!base_tree) {
+            spdlog::error("Failed to build base tree on sample {}.", i);
+            continue;
+        }
+        TernaryTree tree = std::move(base_tree.value());
+
+        // Apply random tree rotation
+        TreeRotator rotator;
+        for (int m = 0; m < 20; ++m) {
+            int mutation_type = rng() % 4; 
+            
+            if (mutation_type == 0) {
+                rotator.root_change(&tree);
+            } else if (mutation_type == 1) {
+                rotator.pauli_shuffle(&tree);
+            } else if (mutation_type == 2) {
+                rotator.mode_association_swap(&tree);
+            } else if (mutation_type == 3) {
+                rotator.majorana_braiding_change(&tree);
+            }
+        }
+
+        double proxy_cost = fast_tree_cost(tree, hamiltonian, apsp);
+
+        qcir::QCir qcir(device.get_num_qubits());
+
+        // Check if circuit can be synthesized on hardware
+        auto mapping = TernaryTreeMapping(tree);
+        auto q_ham = qubitize(hamiltonian, mapping);
+        bool routable = true;
+        try {
+            for (const auto& term : q_ham) {
+                synthesize_term(term, tree, apsp, device, 1.0, qcir);
+            }
+        } catch (...) {
+            routable = false;
+        }
+        if (!routable) {
+            i--; 
+            continue;
+        }
+
+        std::string qasm_file = fmt::format("sample_{}.qasm", i);
+        qcir.write_qasm(qasm_file);
+
+        csv << i << "," << proxy_cost << "\n";
+        csv.flush();
+    }
 }
 
 }  // namespace qsyn::hamiltonian
