@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <random>
+
 #include "device/device.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
 #include "ternary_tree.hpp"
@@ -29,11 +31,14 @@ public:
     // associated with the links are changed.
     void pauli_shuffle(TernaryTree* tt);
     // For nodes with labels (i, u, b) and (i', u', b') the labels are changed to
-    // (i', u, b) and (i, u', b') respectively.
+    // (i', u, b') and (i, u', b) respectively.
     void mode_association_swap(TernaryTree* tt);
     // For a node with label (i, u, b), the braiding b is changed to the
     // opposite one, i.e., '+' is changed to '-' and vice versa.
     void majorana_braiding_change(TernaryTree* tt);
+
+private:
+    std::mt19937 _rng{std::random_device{}()};
 };
 
 }  // namespace qsyn::hamiltonian
