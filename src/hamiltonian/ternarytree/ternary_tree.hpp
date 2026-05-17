@@ -37,9 +37,14 @@ struct TernaryNode {
     virtual bool is_leg() const { return false; }
 
     TernaryEdge* get_edge(BranchType branch) const;
-    TernaryEdge* get_left() const { return get_edge(BranchType::left); }
-    TernaryEdge* get_mid() const { return get_edge(BranchType::mid); }
-    TernaryEdge* get_right() const { return get_edge(BranchType::right); }
+
+    TernaryNode* get_child(BranchType branch) const;
+    TernaryNode* get_left_child() const { return get_child(BranchType::left); }
+    TernaryNode* get_mid_child() const { return get_child(BranchType::mid); }
+    TernaryNode* get_right_child() const { return get_child(BranchType::right); }
+
+    bool has_child(BranchType branch) const { return get_child(branch) != nullptr; }
+
     void set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edge);
 };
 

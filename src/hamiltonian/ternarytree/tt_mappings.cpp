@@ -73,14 +73,14 @@ void TTMapper::_pair_legs() {
     for (size_t i = 0; i < _tree.num_qubits(); i++) {
         TernaryNode* curr = _tree.get_node_by_index(i);
 
-        TernaryNode* left_path = curr->get_left()->target.get();
+        TernaryNode* left_path = curr->get_left_child();
         while (!left_path->is_leg()) {
-            left_path = left_path->get_right()->target.get();
+            left_path = left_path->get_right_child();
         }
 
-        TernaryNode* right_path = curr->get_mid()->target.get();
+        TernaryNode* right_path = curr->get_mid_child();
         while (!right_path->is_leg()) {
-            right_path = right_path->get_right()->target.get();
+            right_path = right_path->get_right_child();
         }
 
         assert(left_path && left_path->is_leg());

@@ -30,13 +30,13 @@ void TreeRotator::ncp_leaf_move(TernaryTree* tt) {
         TernaryNode* node = tt->get_node_by_index(i);
         if (node == tt->get_root()) continue;
 
-        TernaryEdge* left_edge  = node->get_left();
-        TernaryEdge* mid_edge   = node->get_mid();
-        TernaryEdge* right_edge = node->get_right();
+        TernaryNode* left_child  = node->get_left_child();
+        TernaryNode* mid_child   = node->get_mid_child();
+        TernaryNode* right_child = node->get_right_child();
 
-        if (left_edge && left_edge->target && left_edge->target->is_leg() &&
-            mid_edge && mid_edge->target && mid_edge->target->is_leg() &&
-            right_edge && right_edge->target && right_edge->target->is_leg()) {
+        if (left_child && left_child->is_leg() &&
+            mid_child && mid_child->is_leg() &&
+            right_child && right_child->is_leg()) {
             candidate_nodes.push_back(node);
         }
     }
@@ -87,13 +87,13 @@ void TreeRotator::cp_random_leaf_move(TernaryTree* tt, qsyn::device::Device cons
         if (v == tt->get_root()) continue;
 
         // Find v
-        auto* e_left  = v->get_left();
-        auto* e_mid   = v->get_mid();
-        auto* e_right = v->get_right();
+        auto* left_child  = v->get_left_child();
+        auto* mid_child   = v->get_mid_child();
+        auto* right_child = v->get_right_child();
 
-        if (e_left && e_left->target && e_left->target->is_leg() &&
-            e_mid && e_mid->target && e_mid->target->is_leg() &&
-            e_right && e_right->target && e_right->target->is_leg()) {
+        if (left_child && left_child->is_leg() &&
+            mid_child && mid_child->is_leg() &&
+            right_child && right_child->is_leg()) {
             auto* v_qubit = static_cast<TernaryQubitNode*>(v);
             if (!v_qubit->qubit_label.has_value()) continue;
             auto v_qindex = v_qubit->qubit_label.value();
@@ -162,13 +162,13 @@ void TreeRotator::cp_leaf_move(TernaryTree* tt, qsyn::device::Device const& devi
         if (v == tt->get_root()) continue;
 
         // Find v
-        auto* e_left  = v->get_left();
-        auto* e_mid   = v->get_mid();
-        auto* e_right = v->get_right();
+        auto* left_child  = v->get_left_child();
+        auto* mid_child   = v->get_mid_child();
+        auto* right_child = v->get_right_child();
 
-        if (e_left && e_left->target && e_left->target->is_leg() &&
-            e_mid && e_mid->target && e_mid->target->is_leg() &&
-            e_right && e_right->target && e_right->target->is_leg()) {
+        if (left_child && left_child->is_leg() &&
+            mid_child && mid_child->is_leg() &&
+            right_child && right_child->is_leg()) {
             auto* v_qubit = static_cast<TernaryQubitNode*>(v);
             if (!v_qubit->qubit_label.has_value()) continue;
             auto v_qindex = v_qubit->qubit_label.value();
@@ -232,8 +232,8 @@ void TreeRotator::root_change(TernaryTree* tt) {
 
         bool has_leg = false;
         for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
-            TernaryEdge* edge = node->get_edge(b);
-            if (edge && edge->target && edge->target->is_leg()) {
+            auto* child = node->get_child(b);
+            if (child && child->is_leg()) {
                 has_leg = true;
                 break;
             }
@@ -320,8 +320,8 @@ void TreeRotator::pauli_shuffle(TernaryTree* tt) {
 
         int out_degree = 0;
         for (auto b : {BranchType::left, BranchType::mid, BranchType::right}) {
-            TernaryEdge* edge = node->get_edge(b);
-            if (!edge->target->is_leg()) {
+            TernaryNode* child = node->get_child(b);
+            if (child && !child->is_leg()) {
                 out_degree++;
             }
         }

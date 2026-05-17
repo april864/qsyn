@@ -11,13 +11,13 @@
 #include <algorithm>
 #include <vector>
 
-#include "ternary_tree.hpp"
-#include "tree_rotations.hpp"
-#include "hamiltonian/fermionic_hamiltonian.hpp"
-#include "hamiltonian/f2q_mappings.hpp"
-#include "hamiltonian/qubit_hamiltonian.hpp"
 #include "device/device.hpp"
 #include "device/device_analysis.hpp"
+#include "hamiltonian/f2q_mappings.hpp"
+#include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/qubit_hamiltonian.hpp"
+#include "ternary_tree.hpp"
+#include "tree_rotations.hpp"
 #include "util/simulated_annealing.hpp"
 
 namespace qsyn::hamiltonian {
@@ -37,25 +37,25 @@ double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham)
     return total_weight;
 }
 
-void TreeOracle::dfs(const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp, int& timer, 
-    size_t v, size_t p, int current_depth, double cost_from_parent) {
-    _parent[v] = p;
-    _depth[v] = current_depth;
+void TreeOracle::dfs(const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp, int& timer,
+                     size_t v, size_t p, int current_depth, double cost_from_parent) {
+    _parent[v]       = p;
+    _depth[v]        = current_depth;
     _edge_cost_up[v] = cost_from_parent;
-    _dfs_start[v] = ++timer;
+    _dfs_start[v]    = ++timer;
 
     auto v_node = dynamic_cast<TernaryQubitNode*>(tree.get_node_by_index(v));
     if (v_node && v_node->qubit_label.has_value()) {
         size_t phys_v = v_node->qubit_label.value();
 
         for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
-            TernaryEdge* edge = v_node->get_edge(branch);
-            if (edge && edge->target && !edge->target->is_leg()) {
-                auto child_node = dynamic_cast<TernaryQubitNode*>(edge->target.get());
+            auto* child = v_node->get_child(branch);
+            if (child && !child->is_leg()) {
+                auto child_node = dynamic_cast<TernaryQubitNode*>(child);
                 if (child_node && child_node->qubit_label.has_value()) {
-                    size_t next = child_node->id;
+                    size_t next      = child_node->id;
                     size_t phys_next = child_node->qubit_label.value();
-                    
+
                     double weight = apsp.distance[phys_v][phys_next];
                     dfs(tree, apsp, timer, next, v, current_depth + 1, weight);
                 }
@@ -69,24 +69,21 @@ double TreeOracle::calc_branch_tail(const dvlab::APSPResult<QubitIdType>& apsp, 
     if (!edge || !edge->target || edge->target->is_leg()) return 0.0;
 
     TernaryNode* current = edge->target.get();
-    auto curr_qnode = dynamic_cast<TernaryQubitNode*>(current);
-    size_t phys_curr = curr_qnode->qubit_label.value();
-    size_t phys_prev = start_node->qubit_label.value();
-    
+    auto curr_qnode      = dynamic_cast<TernaryQubitNode*>(current);
+    size_t phys_curr     = curr_qnode->qubit_label.value();
+    size_t phys_prev     = start_node->qubit_label.value();
+
     double cost = apsp.distance[phys_prev][phys_curr];
 
     while (!current->is_leg()) {
-        TernaryEdge* z_edge = current->get_right();
-        if (!z_edge || !z_edge->target) break; 
-        
-        TernaryNode* next = z_edge->target.get();
+        TernaryNode* next = current->get_right_child();
         if (next->is_leg()) break;
 
-        auto next_qnode = dynamic_cast<TernaryQubitNode*>(next);
+        auto next_qnode  = dynamic_cast<TernaryQubitNode*>(next);
         size_t phys_next = next_qnode->qubit_label.value();
-        
+
         cost += apsp.distance[phys_curr][phys_next];
-        current = next;
+        current   = next;
         phys_curr = phys_next;
     }
     return cost;
@@ -101,7 +98,7 @@ TreeOracle::TreeOracle(const TernaryTree& tree, const dvlab::APSPResult<QubitIdT
     _edge_cost_up.assign(_n_modes, 0.0);
     _dfs_start.assign(_n_modes, 0);
     _tail_weight.assign(_n_modes, 0.0);
-    
+
     // Run dfs from root to fill _parent, _depth, _edge_cost_up, _dfs_start
     auto root_node = dynamic_cast<TernaryQubitNode*>(tree.get_root());
     if (!root_node) throw std::runtime_error("Root is not a qubit node");
@@ -112,8 +109,8 @@ TreeOracle::TreeOracle(const TernaryTree& tree, const dvlab::APSPResult<QubitIdT
     for (size_t u = 0; u < _n_modes; ++u) {
         auto u_node = dynamic_cast<TernaryQubitNode*>(tree.get_node_by_index(u));
         if (u_node && u_node->qubit_label.has_value()) {
-            double x_cost = calc_branch_tail(apsp, u_node, BranchType::left);
-            double y_cost = calc_branch_tail(apsp, u_node, BranchType::mid);
+            double x_cost   = calc_branch_tail(apsp, u_node, BranchType::left);
+            double y_cost   = calc_branch_tail(apsp, u_node, BranchType::mid);
             _tail_weight[u] = (x_cost + y_cost) / 2.0;
         }
     }
@@ -121,10 +118,16 @@ TreeOracle::TreeOracle(const TernaryTree& tree, const dvlab::APSPResult<QubitIdT
 
 double TreeOracle::get_tree_distance(size_t u, size_t v) const {
     double dist = 0.0;
-    
-    while (_depth[u] > _depth[v]) { dist += _edge_cost_up[u]; u = _parent[u]; }
-    while (_depth[v] > _depth[u]) { dist += _edge_cost_up[v]; v = _parent[v]; }
-    
+
+    while (_depth[u] > _depth[v]) {
+        dist += _edge_cost_up[u];
+        u = _parent[u];
+    }
+    while (_depth[v] > _depth[u]) {
+        dist += _edge_cost_up[v];
+        v = _parent[v];
+    }
+
     while (u != v) {
         dist += _edge_cost_up[u] + _edge_cost_up[v];
         u = _parent[u];
@@ -143,7 +146,7 @@ double TreeOracle::get_subtree_weight(const std::vector<size_t>& nodes) const {
         return _dfs_start[a] < _dfs_start[b];
     });
 
-    // E.g. for nodes a, b, c, d in sorted order, calculate 
+    // E.g. for nodes a, b, c, d in sorted order, calculate
     // dist(a,b) + dist(b,c) + dist(c,d) + dist(d,a)
     double total_weight = 0.0;
     for (size_t i = 0; i < sorted_nodes.size(); ++i) {
@@ -163,7 +166,7 @@ double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, 
     for (const auto& term : f_ham.get_terms()) {
         std::vector<size_t> active_modes;
         for (const auto& op : term.second) {
-          active_modes.push_back(op.first);
+            active_modes.push_back(op.first);
         }
 
         std::sort(active_modes.begin(), active_modes.end());
@@ -232,7 +235,7 @@ TernaryTree pauli_weight_optimize_mapping(
 }
 
 /**
- * @brief Optimizes a fermion-to-qubit mapping to minimize proxy cnot count as 
+ * @brief Optimizes a fermion-to-qubit mapping to minimize proxy cnot count as
    computed by fast_tree_cost.
  * @param initial_tree Initital mapping.
  * @param f_ham Fermionic Hamiltonian to be mapped.
@@ -288,4 +291,4 @@ TernaryTree cnot_proxy_optimize_mapping(
     return best_tree;
 }
 
-} // namespace 
+}  // namespace qsyn::hamiltonian

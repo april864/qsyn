@@ -23,6 +23,12 @@ TernaryEdge* TernaryNode::get_edge(BranchType branch) const {
     return edges[edge_id].get();
 }
 
+TernaryNode* TernaryNode::get_child(BranchType branch) const {
+    auto* edge = get_edge(branch);
+    if (!edge) return nullptr;
+    return edge->target.get();
+}
+
 void TernaryNode::set_edge(BranchType branch, std::unique_ptr<TernaryEdge>&& edge) {
     auto edge_id = static_cast<std::underlying_type_t<BranchType>>(branch);
 
@@ -152,7 +158,7 @@ void TernaryTree::swap_indices(std::size_t id1, std::size_t id2) {
 }
 
 size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
-    if (parent->get_edge(branch)) {
+    if (parent->has_child(branch)) {
         throw std::runtime_error("Branch already has a node");
     }
 
@@ -174,7 +180,7 @@ size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
  */
 std::optional<size_t> TernaryTree::add_qubit_node_to_first_empty_branch(TernaryNode* parent) {
     for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
-        if (!parent->get_edge(branch)) {
+        if (!parent->has_child(branch)) {
             return std::make_optional(add_qubit_node(parent, branch));
         }
     }
@@ -182,7 +188,7 @@ std::optional<size_t> TernaryTree::add_qubit_node_to_first_empty_branch(TernaryN
 }
 
 size_t TernaryTree::add_leg_node(TernaryNode* parent, BranchType branch) {
-    if (parent->get_edge(branch)) {
+    if (parent->has_child(branch)) {
         throw std::runtime_error("Branch already has a node");
     }
 
@@ -203,7 +209,7 @@ void TernaryTree::append_legs_to_tree() {
     for (size_t i = 0; i < _num_qubits; ++i) {
         TernaryNode* node = get_node_by_index(i);
         for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
-            if (!node->get_edge(branch)) {
+            if (!node->has_child(branch)) {
                 add_leg_node(node, branch);
             }
         }
@@ -232,9 +238,9 @@ void append_node_hierarchy(TernaryNode* node, std::string const& prefix,
     std::array<TernaryNode*, 3> children = {nullptr, nullptr, nullptr};
     size_t n                             = 0;
     for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
-        TernaryEdge* e = node->get_edge(branch);
-        if (e && e->target) {
-            children.at(n) = e->target.get();
+        auto* child = node->get_child(branch);
+        if (child) {
+            children.at(n) = child;
             n++;
         }
     }
@@ -263,9 +269,9 @@ std::string to_string(TernaryTree const& tree) {
     std::array<TernaryNode*, 3> children = {nullptr, nullptr, nullptr};
     size_t n                             = 0;
     for (auto branch : {BranchType::left, BranchType::mid, BranchType::right}) {
-        TernaryEdge* e = root->get_edge(branch);
-        if (e && e->target) {
-            children.at(n++) = e->target.get();
+        auto* child = root->get_child(branch);
+        if (child) {
+            children.at(n++) = child;
         }
     }
     std::string child_prefix = "";
