@@ -54,9 +54,6 @@ try:
     df = pd.read_csv(csv_file)
     df = df.dropna().head(target_samples) # Trim exactly to 100
 
-    # rho, p_value = spearmanr(df['ProxyCost'], df['TrueCNOTs'])
-    # print(f"Spearman's Rank Correlation (ρ): {rho:.4f}")
-
     plt.figure(figsize=(10, 6))
     plt.scatter(df['ProxyCost'], df['TrueCNOTs'], alpha=0.5, color='#2c3e50', edgecolors='w', s=60)
     plt.title(f"Proxy Cost (number of two-qubit tree interactions) vs Actual Number of CNOTs", fontsize=14, fontweight='bold')

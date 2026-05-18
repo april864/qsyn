@@ -567,4 +567,111 @@ void evaluate_proxy_cost(
     }
 }
 
+void evaluate_proxy_cost_termwise(
+    FermionHamiltonian const& hamiltonian,
+    device::Device const& device,
+    std::string const& output_csv,
+    size_t samples) {
+
+    auto const apsp = floyd_warshall(device, device::default_floyd_warshall_cost);
+
+    std::ofstream csv(output_csv, std::ios::app);
+    
+    // Seed randomizer
+    std::random_device rd;
+    std::mt19937 rng(rd());
+
+    for (size_t i = 0; i < samples; ++i) {
+        fmt::println("Starting tree {}", i);
+        auto base_tree = build_bonsai_ternary_tree(device, apsp, hamiltonian.n_modes());
+        if (!base_tree) {
+            spdlog::error("Failed to build base tree on sample {}.", i);
+            continue;
+        }
+        TernaryTree tree = std::move(base_tree.value());
+
+        // Apply random tree rotations
+        TreeRotator rotator;
+        for (int m = 0; m < 20; ++m) {
+            int mutation_type = rng() % 4; 
+            
+            if (mutation_type == 0) {
+                rotator.root_change(&tree);
+            } else if (mutation_type == 1) {
+                rotator.pauli_shuffle(&tree);
+            } else if (mutation_type == 2) {
+                rotator.mode_association_swap(&tree);
+            } else if (mutation_type == 3) {
+                rotator.majorana_braiding_change(&tree);
+            }
+        }
+
+        // Tree map on hardware
+        auto mapping = TernaryTreeMapping(tree);
+        auto q_ham = qubitize(hamiltonian, mapping);
+        TreeOracle oracle(tree, apsp);
+        
+        // Initialize circuit
+        qcir::QCir full_qcir(device.get_num_qubits());
+        bool routable = true;
+        
+        // To store values from each term (single_term_cnots and cnot_diff count 2-qubit gates)
+        struct TermData {
+            double proxy;
+            size_t single_term_cnots;
+            size_t cnot_diff;
+        };
+        std::vector<TermData> sample_terms;
+
+        try {
+            for (const auto& term : q_ham) {
+                
+                // Calculate proxy cost
+                std::vector<size_t> active_nodes;
+                for (size_t i = 0; i < term.n_qubits(); ++i) {
+                    if (!term.is_i(i)) active_nodes.push_back(i);
+                }
+                double term_proxy = oracle.get_subtree_weight(active_nodes);
+
+                // Calculate individual term's circuit
+                // TODO: get circuit depth instead of 2q gate counts
+                qcir::QCir single_term_qcir(device.get_num_qubits());
+                synthesize_term(term, tree, apsp, device, 1.0, single_term_qcir);
+                
+                size_t single_term_cnots = 0;
+                for (auto const& gate : single_term_qcir.get_gates()) {
+                    if (gate->get_num_qubits() == 2) single_term_cnots++;
+                }
+
+                // Calculate contribution to full circuit
+                size_t gates_before = full_qcir.get_gates().size();
+                synthesize_term(term, tree, apsp, device, 1.0, full_qcir);
+                size_t gates_after = full_qcir.get_gates().size();
+
+                size_t cnot_diff = 0;
+                auto const& all_gates = full_qcir.get_gates();
+                for (size_t g = gates_before; g < gates_after; ++g) {
+                    if (all_gates[g]->get_num_qubits() == 2) cnot_diff++;
+                }
+
+                sample_terms.push_back({term_proxy, single_term_cnots, cnot_diff});
+            }
+        } catch (...) {
+            routable = false;
+        }
+
+        if (!routable) {
+            i--; 
+            continue;
+        }
+
+        // Write to CSV
+        for (const auto& td : sample_terms) {
+            csv << td.proxy << "," << td.single_term_cnots << "," << td.cnot_diff << "\n";
+        }
+        
+        csv.flush(); 
+    }
+}
+
 }  // namespace qsyn::hamiltonian

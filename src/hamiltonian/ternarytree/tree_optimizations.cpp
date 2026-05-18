@@ -189,6 +189,7 @@ double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, 
     TernaryTreeMapping mapping(tree);
     QubitHamiltonian q_ham = qubitize(f_ham, mapping);
 
+    // put something here to track each term?
     for (const auto& term : q_ham) {
         std::vector<size_t> active_nodes;
         for (size_t i = 0; i < term.n_qubits(); ++i) {
