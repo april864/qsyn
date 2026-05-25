@@ -260,6 +260,19 @@ TEST_CASE("TernaryTree move constructor", "[ternary_tree]") {
     REQUIRE(original.get_root() == nullptr);
 }
 
+TEST_CASE("TernaryTree remap_node_ids permutes index slots", "[ternary_tree]") {
+    TernaryTree tree;
+    auto* root = tree.get_root();
+    tree.add_qubit_node(root, BranchType::left);
+
+    tree.remap_node_ids(std::array<size_t, 2>{1, 0});
+
+    REQUIRE(dynamic_cast<TernaryQubitNode*>(tree.get_root())->id == 1);
+    REQUIRE(dynamic_cast<TernaryQubitNode*>(tree.get_node_by_index(0))->id == 0);
+    REQUIRE(dynamic_cast<TernaryQubitNode*>(tree.get_node_by_index(1))->id == 1);
+    REQUIRE(tree.get_node_by_index(1) == tree.get_root());
+}
+
 TEST_CASE("TernaryTree move then use moved-to", "[ternary_tree]") {
     TernaryTree a(3);
     a.assign_qubit(0, 0);

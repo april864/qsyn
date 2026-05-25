@@ -8,8 +8,11 @@
 
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
+#include <numeric>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -157,6 +160,33 @@ void TernaryTree::swap_indices(std::size_t id1, std::size_t id2) {
     _index_to_node[id2] = node1;
 }
 
+void TernaryTree::remap_node_ids(std::span<size_t const> slot_of_label) {
+    if (slot_of_label.size() != _num_qubits) {
+        throw std::invalid_argument("slot_of_label size must match num_qubits()");
+    }
+
+    std::vector<size_t> slot_contents(_num_qubits);
+    std::iota(slot_contents.begin(), slot_contents.end(), 0);
+
+    for (size_t label = 0; label < _num_qubits; ++label) {
+        size_t const target_phys = slot_of_label[label];
+        if (target_phys >= _num_qubits) {
+            throw std::invalid_argument("slot_of_label contains invalid construction index");
+        }
+        while (slot_contents[label] != target_phys) {
+            size_t swap_slot = label;
+            for (size_t s = 0; s < _num_qubits; ++s) {
+                if (slot_contents[s] == target_phys) {
+                    swap_slot = s;
+                    break;
+                }
+            }
+            swap_indices(label, swap_slot);
+            std::swap(slot_contents[label], slot_contents[swap_slot]);
+        }
+    }
+}
+
 size_t TernaryTree::add_qubit_node(TernaryNode* parent, BranchType branch) {
     if (parent->has_child(branch)) {
         throw std::runtime_error("Branch already has a node");
@@ -214,6 +244,28 @@ void TernaryTree::append_legs_to_tree() {
             }
         }
     }
+}
+
+void TernaryTree::swap_legs(TernaryLeg* leg1, TernaryLeg* leg2) {
+    if (leg1 == leg2) return;
+
+    auto belongs_to_tree = [this](TernaryLeg* leg) {
+        return std::find(_legs.begin(), _legs.end(), leg) != _legs.end();
+    };
+    if (!belongs_to_tree(leg1) || !belongs_to_tree(leg2)) {
+        throw std::invalid_argument("Leg does not belong to this tree");
+    }
+
+    TernaryEdge* edge1 = leg1->incoming_edge;
+    TernaryEdge* edge2 = leg2->incoming_edge;
+
+    edge1->target.swap(edge2->target);
+
+    leg1->parent        = edge2->source;
+    leg1->incoming_edge = edge2;
+
+    leg2->parent        = edge1->source;
+    leg2->incoming_edge = edge1;
 }
 
 namespace {
@@ -280,4 +332,5 @@ std::string to_string(TernaryTree const& tree) {
     }
     return out;
 }
+
 }  // namespace qsyn::hamiltonian

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "hamiltonian/qubit_hamiltonian.hpp"
+#include "tableau/stabilizer_tableau.hpp"
 #include "ternary_tree.hpp"
 
 namespace qsyn::hamiltonian {
@@ -46,6 +47,14 @@ public:
         return is_creation ? _mode_to_ferm_ops.at(mode).creation : _mode_to_ferm_ops.at(mode).annihilation;
     }
 
+    [[nodiscard]] ComplexPauliTerm leg_pauli_product(TernaryLeg* leg_p, TernaryLeg* leg_q) const;
+
+    TernaryTree const& tree() const { return _tree; }
+    std::unordered_map<TernaryLeg*, std::vector<Pauli>> const& pauli_strs() const { return _pauli_strs; }
+    std::unordered_map<size_t, std::pair<TernaryLeg*, TernaryLeg*>> const& leg_pairs() const {
+        return _leg_pairs;
+    }
+
 private:
     TernaryTree _tree;
     std::unordered_map<TernaryLeg*, std::vector<Pauli>> _pauli_strs;
@@ -57,5 +66,8 @@ private:
     void _pair_legs();
     void _load_ferm_ops();
 };
+
+[[nodiscard]]
+tableau::StabilizerTableau to_clifford(TTMapper const& mapper);
 
 }  // namespace qsyn::hamiltonian

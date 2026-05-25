@@ -9,6 +9,8 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <span>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -91,6 +93,13 @@ public:
     void assign_qubit(size_t node_index, QubitIdType qubit_label);
     void swap_indices(std::size_t id1, std::size_t id2);
 
+    /**
+     * @brief Permute index slots so get_node_by_index(k) is the node with fermion id k.
+     * @param slot_of_label slot_of_label[k] is the construction index of the node that
+     *        should be labeled k (before calling assign_qubit).
+     */
+    void remap_node_ids(std::span<size_t const> slot_of_label);
+
     TernaryNode* get_root() const { return _root.get(); }
     std::unique_ptr<TernaryNode>& get_root_ptr() { return _root; }
 
@@ -107,6 +116,8 @@ public:
     size_t add_leg_node(TernaryNode* parent, BranchType branch);
 
     void append_legs_to_tree();
+
+    void swap_legs(TernaryLeg* leg1, TernaryLeg* leg2);
 
 private:
     std::unique_ptr<TernaryNode> _root;

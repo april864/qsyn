@@ -378,7 +378,7 @@ target_include_directories(
 target_link_libraries(
     ${UNIT_TEST_NAME} PRIVATE ${QSYN_LIB_NAME})
 target_link_libraries(
-    ${UNIT_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    ${UNIT_TEST_NAME} PRIVATE Catch2::Catch2)
 
 target_link_libraries_system(
     ${UNIT_TEST_NAME}

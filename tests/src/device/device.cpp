@@ -4,6 +4,7 @@
 
 #include "device/device.hpp"
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace qsyn::device;
@@ -130,7 +131,7 @@ TEST_CASE("Device is_adjacent two-arg form", "[device]") {
 }
 
 TEST_CASE("Device info_string", "[device]") {
-    Device d = make_line_3();
+    Device d         = make_line_3();
     std::string info = d.info_string();
     REQUIRE(info.find("line-3") != std::string::npos);
     REQUIRE(info.find("3 qubits") != std::string::npos);
@@ -140,7 +141,7 @@ TEST_CASE("Device info_string", "[device]") {
 
 TEST_CASE("Device gate_info_string single qubit", "[device]") {
     Device d = make_line_3();
-    auto s0 = d.gate_info_string(0);
+    auto s0  = d.gate_info_string(0);
     REQUIRE(s0.has_value());
     REQUIRE(s0->find("Qubit 0") != std::string::npos);
     REQUIRE(s0->find("adjacencies") != std::string::npos);
@@ -167,7 +168,7 @@ TEST_CASE("Device gate_info_string qubit pair", "[device]") {
 }
 
 TEST_CASE("Device get_coupling_graph returns consistent reference", "[device]") {
-    Device d = make_line_3();
+    Device d       = make_line_3();
     auto const& g1 = d.get_coupling_graph();
     auto const& g2 = d.get_coupling_graph();
     REQUIRE(&g1 == &g2);
