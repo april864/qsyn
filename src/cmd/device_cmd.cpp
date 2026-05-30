@@ -10,8 +10,10 @@
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "./device_mgr.hpp"
 #include "device/device.hpp"
@@ -333,6 +335,60 @@ dvlab::Command device_fetch_cmd(qsyn::device::DeviceMgr& device_mgr) {
             device_mgr.add(device_mgr.get_next_id(), std::make_unique<IBMQDevice>(std::move(device.value())));
 
             return CmdExecResult::done;
+            }};
+}
+
+dvlab::Command device_write_cmd(qsyn::device::DeviceMgr& device_mgr) {
+    return {
+        "write",
+        [](ArgumentParser& parser) {
+            parser.description("Write the focused device to disk");
+
+            parser.add_argument<std::string>("output")
+                .help(
+                    "Output path: a .json file (any name), or a directory "
+                    "(writes <device_name>.json there).");
+
+            parser.add_argument<bool>("--ibmq")
+                .action(store_true)
+                .help("Write IBM calibration bundle for Qiskit/Aer (single JSON file)");
+        },
+        [&device_mgr](ArgumentParser const& parser) {
+            if (device_mgr.empty()) {
+                spdlog::error("No device loaded");
+                return CmdExecResult::error;
+            }
+
+            if (!parser.get<bool>("--ibmq")) {
+                spdlog::error("Only `--ibmq` export is supported currently");
+                return CmdExecResult::error;
+            }
+
+            auto const* ibmq = dynamic_cast<IBMQDevice const*>(device_mgr.get());
+            if (ibmq == nullptr || !ibmq->jsons.has_value()) {
+                spdlog::error("Focused device has no IBM JSON (use `device fetch` first)");
+                return CmdExecResult::error;
+            }
+
+            auto const output_arg = parser.get<std::string>("output");
+            if (output_arg.empty()) {
+                spdlog::error("Output path is empty");
+                return CmdExecResult::error;
+            }
+
+            std::filesystem::path output_path = output_arg;
+            if (!output_arg.empty() && output_arg.back() == '/') {
+                output_path = output_path / fmt::format("{}.json", ibmq->get_name());
+            } else if (std::filesystem::is_directory(output_path)) {
+                output_path = output_path / fmt::format("{}.json", ibmq->get_name());
+            } else if (output_path.extension().empty()) {
+                output_path.replace_extension(".json");
+            }
+
+            if (!write_ibmq_calibration(*ibmq, output_path)) {
+                return CmdExecResult::error;
+            }
+            return CmdExecResult::done;
         }};
 }
 
@@ -344,6 +400,7 @@ dvlab::Command device_cmd(qsyn::device::DeviceMgr& device_mgr) {
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_checkout_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_read_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", device_fetch_cmd(device_mgr));
+    cmd.add_subcommand("device-cmd-group", device_write_cmd(device_mgr));
     cmd.add_subcommand("device-cmd-group", dvlab::utils::mgr_delete_cmd(device_mgr));
     return cmd;
 }

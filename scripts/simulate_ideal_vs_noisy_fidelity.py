@@ -11,6 +11,7 @@ where d = 2^n is the Hilbert space dimension.
 Usage:
   python simulate_ideal_vs_noisy_fidelity.py circuit.qasm --backend fake_manila
   python simulate_ideal_vs_noisy_fidelity.py circuit.qasm --backend ibmq_manila  # real backend, needs IBMQ token
+  python simulate_ideal_vs_noisy_fidelity.py circuit.qasm --ibmq-calibration wip/torino_sub.json
 
 For connectivity-preserving gate nativization and optimization, run
   nativize_and_optimize_qasm.py circuit.qasm --backend <name> -o circuit.opt.qasm
@@ -39,6 +40,12 @@ if (SCRIPT_DIR / "get_backend.py").exists():
         HAS_GET_BACKEND = False
 else:
     HAS_GET_BACKEND = False
+
+try:
+    from ibmq_sliced_backend import load_calibration, load_sliced_backend, noise_model_from_calibration
+    HAS_SLICED_BACKEND = True
+except ImportError:
+    HAS_SLICED_BACKEND = False
 
 try:
     import qiskit_ibm_runtime.fake_provider as fake_provider
@@ -335,8 +342,15 @@ def main():
     parser.add_argument(
         "--backend",
         type=str,
-        default="fake_manila",
-        help="Backend name: 'fake_manila', 'fake_oslo', or real 'ibmq_manila' etc.",
+        default=None,
+        help="Backend name: 'fake_manila', 'fake_oslo', or real 'ibmq_manila' etc. (default: fake_manila)",
+    )
+    parser.add_argument(
+        "--ibmq-calibration",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="qsyn device write --ibmq JSON file (logical qubits 0..n-1; exclusive with --backend)",
     )
     parser.add_argument(
         "--use-real-backend",
@@ -360,6 +374,13 @@ def main():
         help="Only simulate the |0...0> input state (no averaging over basis inputs).",
     )
     args = parser.parse_args()
+
+    if args.backend is not None and args.ibmq_calibration is not None:
+        print("Error: use only one of --backend and --ibmq-calibration", file=sys.stderr)
+        return 1
+
+    if args.backend is None and args.ibmq_calibration is None:
+        args.backend = "fake_manila"
 
     circuit_path = Path(args.circuit)
     if not circuit_path.exists():
@@ -394,7 +415,29 @@ def main():
         return 1
 
     # Get backend and noise model
-    if args.use_real_backend and HAS_GET_BACKEND:
+    parent_physical = None
+    if args.ibmq_calibration is not None:
+        if not HAS_SLICED_BACKEND:
+            print("Error: ibmq_sliced_backend.py is required for --ibmq-calibration", file=sys.stderr)
+            return 1
+        try:
+            bundle = load_calibration(args.ibmq_calibration)
+            if max(active_indices) >= bundle.num_qubits:
+                print(
+                    f"Error: circuit uses logical qubit indices up to {max(active_indices)} "
+                    f"but calibration export has only {bundle.num_qubits} qubits",
+                    file=sys.stderr,
+                )
+                return 1
+            backend = load_sliced_backend(args.ibmq_calibration)
+            noise_model = noise_model_from_calibration(args.ibmq_calibration)
+            parent_physical = bundle.physical_qubits
+        except Exception as e:
+            print(f"Error loading IBM calibration export: {e}", file=sys.stderr)
+            return 1
+        if reduced:
+            noise_model = noise_model_for_active_qubits(noise_model, active_indices)
+    elif args.use_real_backend and HAS_GET_BACKEND:
         backend = get_real_backend(args.backend, verbose=True)
     else:
         if HAS_GET_BACKEND:
@@ -438,7 +481,15 @@ def main():
         print("Preserving backend qubits: circuit uses contiguous 0..n-1; backend noise applied to those qubits.")
 
     print(f"Circuit: {circuit_path} ({n_qubits} qubits simulated)")
-    print(f"Backend: {backend.name}")
+    if parent_physical is not None:
+        parent_by_logical = [
+            parent_physical[i] if i < len(parent_physical) else "?"
+            for i in (active_indices if reduced else list(range(n_qubits)))
+        ]
+        print(f"Backend: {backend.name} (qsyn IBM JSON export)")
+        print(f"  logical -> parent physical: {parent_by_logical}")
+    else:
+        print(f"Backend: {backend.name}")
     print()
 
     if args.input_all_zero:

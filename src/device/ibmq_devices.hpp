@@ -10,7 +10,10 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <span>
 #include <string_view>
+#include <tl/expected.hpp>
+#include <vector>
 
 #include "device/device.hpp"
 
@@ -33,9 +36,37 @@ struct IBMQDevice : public Device {
     std::string backend_version;
     std::chrono::sys_seconds last_update_time;
     IBMQDeviceJsonsSource json_source;
+    /// IBM backend JSON (full or already sliced/remapped to logical 0..n-1).
+    std::optional<IBMQDeviceJsons> jsons;
+    /// When set, ``parent_physical_qubits[logical]`` on the parent backend (for remap export).
+    std::optional<std::vector<QubitIdType>> parent_physical_qubits;
 
     std::string info_string() const override;
 };
+
+enum class SliceIBMQDeviceError : uint8_t {
+    duplicate_qubit_id,
+    unknown_qubit_id,
+};
+
+struct SlicedIBMQDeviceExport {
+    IBMQDeviceJsons jsons;
+    /// ``physical_qubits[logical]`` on the parent backend.
+    std::vector<QubitIdType> physical_qubits;
+};
+
+[[nodiscard]] tl::expected<SlicedIBMQDeviceExport, SliceIBMQDeviceError> slice_ibmq_device_jsons(
+    IBMQDeviceJsons const& full,
+    std::span<QubitIdType const> physical_qubits);
+
+IBMQDevice make_ibmq_subdevice(
+    IBMQDevice const& parent,
+    Device induced_device,
+    SlicedIBMQDeviceExport sliced);
+
+bool write_ibmq_calibration(
+    IBMQDevice const& device,
+    std::filesystem::path const& output_path);
 
 auto read_ibmq_device(IBMQDeviceJsons const& jsons) -> std::optional<IBMQDevice>;
 

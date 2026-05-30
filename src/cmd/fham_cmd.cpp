@@ -14,6 +14,7 @@
 #include "cmd/device_mgr.hpp"
 #include "cmd/fham_mgr.hpp"
 #include "device/device_analysis.hpp"
+#include "device/ibmq_devices.hpp"
 #include "hamiltonian/ternarytree/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
@@ -223,6 +224,11 @@ dvlab::Command fham_treespile_cmd(
             parser.add_argument<bool>("-e", "--exhaustive")
                 .action(store_true)
                 .help("Exhaustively search for the best ternary tree, stemming from all qubits");
+            parser.add_argument<bool>("--logical-index")
+                .action(store_true)
+                .help(
+                    "Label QCir qubits by fermion tree index (0..n-1) instead of physical device "
+                    "qubit id; checkout an induced subdevice on the device manager");
         },
         [&](ArgumentParser const& parser) {
             if (device_mgr.empty()) {
@@ -249,12 +255,14 @@ dvlab::Command fham_treespile_cmd(
             bool optimize1          = parser.get<bool>("--optimize1");
             bool optimize2          = parser.get<bool>("--optimize2");
             bool exhaustive        = parser.get<bool>("--exhaustive");
+            bool use_logical_index = parser.get<bool>("--logical-index");
             auto cost_fn           = device::default_floyd_warshall_cost;
             if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(*f_ham, device, time, n_steps, cost_fn, optimize1, optimize2, exhaustive);
+            auto const result = treespile(
+                *f_ham, device, time, n_steps, cost_fn, optimize1, optimize2, exhaustive, use_logical_index);
 
             if (!result.has_value()) {
                 auto const reason = result.error();
@@ -275,13 +283,64 @@ dvlab::Command fham_treespile_cmd(
                 return dvlab::CmdExecResult::error;
             }
 
-            auto circuit      = result.value();
+            auto circuit      = std::move(result.value().circuit);
             auto const new_id = qcir_mgr.get_next_id();
 
             qcir_mgr.add(new_id, std::make_unique<qcir::QCir>(std::move(circuit)));
             qcir_mgr.set_filename(fham_mgr.get_filename());
             qcir_mgr.add_procedures(fham_mgr.get_procedures());
-            qcir_mgr.add_procedure("fham_treespile");
+            qcir_mgr.add_procedure(use_logical_index ? "fham_treespile_logical" : "fham_treespile");
+
+            device::Device const* error_device = &device;
+            if (use_logical_index) {
+                auto const* parent_ibmq = dynamic_cast<device::IBMQDevice const*>(&device);
+                if (parent_ibmq == nullptr || !parent_ibmq->jsons.has_value()) {
+                    spdlog::error(
+                        "treespile --logical-index requires an IBM device with JSON "
+                        "(run `device fetch` on the backend first)");
+                    return dvlab::CmdExecResult::error;
+                }
+
+                auto const& physical_qubits = result.value().physical_qubits;
+                auto sub                    = device.induced_subdevice(physical_qubits);
+                if (!sub.has_value()) {
+                    switch (sub.error()) {
+                        case device::InducedSubdeviceError::duplicate_qubit_id:
+                            spdlog::error("treespile: duplicate physical qubit in induced subdevice");
+                            break;
+                        case device::InducedSubdeviceError::unknown_qubit_id:
+                            spdlog::error("treespile: unknown physical qubit in induced subdevice");
+                            break;
+                    }
+                    return dvlab::CmdExecResult::error;
+                }
+
+                auto sliced_json = device::slice_ibmq_device_jsons(*parent_ibmq->jsons, physical_qubits);
+                if (!sliced_json.has_value()) {
+                    switch (sliced_json.error()) {
+                        case device::SliceIBMQDeviceError::duplicate_qubit_id:
+                            spdlog::error("treespile: duplicate physical qubit when slicing IBM JSON");
+                            break;
+                        case device::SliceIBMQDeviceError::unknown_qubit_id:
+                            spdlog::error("treespile: unknown physical qubit when slicing IBM JSON");
+                            break;
+                    }
+                    return dvlab::CmdExecResult::error;
+                }
+
+                auto const sub_id = device_mgr.get_next_id();
+                device_mgr.add(
+                    sub_id,
+                    std::make_unique<device::IBMQDevice>(
+                        device::make_ibmq_subdevice(*parent_ibmq, std::move(sub->device), std::move(*sliced_json))));
+                device_mgr.checkout(sub_id);
+                error_device = device_mgr.get();
+                fmt::println(
+                    "Checked out induced subdevice ({} qubits, physical [{}]) as device {}",
+                    error_device->get_num_qubits(),
+                    fmt::join(physical_qubits, ", "),
+                    sub_id);
+            }
 
             // go through the gates in the circuits and collect the errors of the 2-qubit gates
             std::vector<float> two_qubit_gate_errors;
@@ -289,7 +348,7 @@ dvlab::Command fham_treespile_cmd(
             for (auto const& gate : qcir_mgr.get()->get_gates()) {
                 if (gate->get_num_qubits() == 2) {
                     auto const& qubits    = gate->get_qubits();
-                    auto const& gate_info = device.get_gate_info(device::Device::QubitPair{qubits[0], qubits[1]});
+                    auto const& gate_info = error_device->get_gate_info(device::Device::QubitPair{qubits[0], qubits[1]});
                     assert(!gate_info.empty());
                     two_qubit_gate_errors.push_back(gate_info[0].error);
                 }

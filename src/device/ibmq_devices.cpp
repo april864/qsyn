@@ -93,6 +93,37 @@ void parse_basic_info(IBMQDeviceJsons const& jsons, IBMQDevice& device) {
     device.last_update_time = parse_iso8601(properties_json["last_update_date"]["__value__"].get<std::string>());
 }
 
+auto find_qubit_parameter(nlohmann::json const& qubit, std::string const& name)
+    -> std::optional<float> {
+    for (auto const& param : qubit) {
+        if (param["name"].get<std::string>() == name) {
+            return param["value"].get<float>();
+        }
+    }
+    return std::nullopt;
+}
+
+void parse_qubits(IBMQDeviceJsons const& jsons, IBMQDevice& device) {
+    auto const& properties_json = jsons.properties_json;
+    if (!properties_json.contains("qubits")) {
+        return;
+    }
+
+    size_t qubit_id = 0;
+    for (auto const& qubit : properties_json["qubits"]) {
+        if (auto t1 = find_qubit_parameter(qubit, "T1")) {
+            device.set_qubit_t1(qubit_id, *t1);
+        }
+        if (auto t2 = find_qubit_parameter(qubit, "T2")) {
+            device.set_qubit_t2(qubit_id, *t2);
+        }
+        if (auto readout = find_qubit_parameter(qubit, "readout_error")) {
+            device.set_readout_error(qubit_id, *readout);
+        }
+        ++qubit_id;
+    }
+}
+
 void parse_gates(IBMQDeviceJsons const& jsons, IBMQDevice& device) {
     auto const& [source, device_json, properties_json] = jsons;
 
@@ -141,11 +172,13 @@ auto read_ibmq_device(IBMQDeviceJsons const& jsons)
     try {
         parse_basic_info(jsons, device);
         parse_gates(jsons, device);
+        parse_qubits(jsons, device);
     } catch (const nlohmann::json::exception& e) {
         spdlog::error("Failed to parse IBMQ device: {}", e.what());
         return std::nullopt;
     }
 
+    device.jsons = jsons;
     return device;
 }
 

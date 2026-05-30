@@ -7,6 +7,7 @@
 #pragma once
 
 #include <tl/expected.hpp>
+#include <vector>
 
 #include "device/device.hpp"
 #include "device/device_analysis.hpp"
@@ -23,7 +24,13 @@ enum class TreespileFailReason : uint8_t {
     tt_build_failed_not_enough_qubits,
 };
 
-tl::expected<qcir::QCir, TreespileFailReason>
+struct TreespileResult {
+    qcir::QCir circuit;
+    /// Populated when ``use_logical_indices`` is true: ``physical_qubits[logical]`` on the parent device.
+    std::vector<QubitIdType> physical_qubits;
+};
+
+tl::expected<TreespileResult, TreespileFailReason>
 treespile(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
@@ -32,6 +39,7 @@ treespile(
     device::APSPCostFnType const& cost_fn = device::default_floyd_warshall_cost,
     bool optimize1                        = false,
     bool optimize2                        = false,
-    bool exhaustive                       = false);
+    bool exhaustive                       = false,
+    bool use_logical_indices              = false);
 
 }  // namespace qsyn::hamiltonian
