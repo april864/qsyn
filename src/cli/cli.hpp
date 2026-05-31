@@ -144,6 +144,7 @@ public:
     bool add_variables_from_dofiles(std::filesystem::path const& filepath, std::span<std::string const> arguments);
 
     void sigint_handler(int signum);
+    void reset_command_sigint_strikes();
     bool stop_requested() const { return !_command_threads.empty() && _command_threads.top().get_stop_token().stop_requested(); }
 
     // printing functions

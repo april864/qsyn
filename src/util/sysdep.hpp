@@ -49,6 +49,7 @@ inline std::optional<std::string> get_home_directory() {
     return std::nullopt;
 }
 
+// Instant terminal reset from the input loop; not worth fork/wait + interrupt handling.
 inline void clear_terminal() {
 #ifdef _WIN32
     int const result = system("cls");
@@ -63,9 +64,8 @@ inline void clear_terminal() {
 [[nodiscard]]
 auto python_package_exists(std::string_view package_name) -> bool;
 
-inline auto pdflatex_exists() -> bool {
-    return system("pdflatex --version > /dev/null 2>&1") == 0;
-};
+[[nodiscard]]
+auto pdflatex_exists() -> bool;
 
 auto get_qsyn_executable_dir() -> std::filesystem::path;
 auto get_qsyn_config_dir() -> std::optional<std::filesystem::path>;
@@ -73,9 +73,10 @@ auto get_qsyn_config_dir() -> std::optional<std::filesystem::path>;
 [[nodiscard]]
 auto is_uv_available() -> bool;
 
-auto uv_run_script(std::string_view script_path, std::vector<std::string> args = {}) -> int;
+/// Run ``sh -c <command>``; returns shell-style exit code (130 if interrupted via ``stop_requested()``).
+auto run_shell_command_interruptible(std::string const& shell_command) -> int;
 
-// if system(...) returns 0, then qiskit is installed
+auto uv_run_script(std::string_view script_path, std::vector<std::string> args = {}) -> int;
 
 }  // namespace utils
 

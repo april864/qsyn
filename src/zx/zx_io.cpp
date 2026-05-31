@@ -956,8 +956,16 @@ bool ZXGraph::write_pdf(std::string const& filename) const {
     tex_file.close();
 
     // Unix cmd: pdflatex -halt-on-error -output-directory <path/to/dir> <path/to/tex>
-    auto const cmd = fmt::format("pdflatex -halt-on-error -output-directory {0} {1} >/dev/null 2>&1", temp_tex_path.parent_path().string(), temp_tex_path.string());
-    if (system(cmd.c_str()) != 0) {
+    auto const cmd = fmt::format(
+        "pdflatex -halt-on-error -output-directory {0} {1} >/dev/null 2>&1",
+        temp_tex_path.parent_path().string(),
+        temp_tex_path.string());
+    auto const status = dvlab::utils::run_shell_command_interruptible(cmd);
+    if (status == 130) {
+        spdlog::warn("PDF generation interrupted");
+        return false;
+    }
+    if (status != 0) {
         spdlog::error("failed to generate PDF");
         return false;
     }

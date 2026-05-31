@@ -123,6 +123,8 @@ namespace dvlab {
  */
 std::pair<CmdExecResult, std::string> dvlab::CommandLineInterface::listen_to_input(std::istream& istr, std::string_view prompt, ListenConfig const& config) {
     using namespace key_code;
+    reset_command_sigint_strikes();
+
     auto const setting_restorer = dvlab::utils::scope_exit{
         [old_settings             = set_keypress(),
          old_listening_for_inputs = std::exchange(_listening_for_inputs, true),

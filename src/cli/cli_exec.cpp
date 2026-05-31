@@ -190,6 +190,8 @@ dvlab::CommandLineInterface::_parse_one_command(std::string_view cmd) {
 }
 
 CmdExecResult CommandLineInterface::_dispatch_command(dvlab::Command* cmd, std::vector<argparse::Token> options) {
+    reset_command_sigint_strikes();
+
     std::atomic<CmdExecResult> exec_result = CmdExecResult::done;
     _usage.start_tick();
     _command_threads.emplace(
@@ -200,6 +202,10 @@ CmdExecResult CommandLineInterface::_dispatch_command(dvlab::Command* cmd, std::
     assert(!_command_threads.empty());
 
     assert(_command_threads.top().get_stop_token().stop_requested() == false);
+
+    dvlab::utils::scope_exit const reset_sigint_guard{[this]() {
+        reset_command_sigint_strikes();
+    }};
 
     // wait for the command to finish
     _command_threads.top().join();

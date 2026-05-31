@@ -10,15 +10,40 @@
 #include <fmt/std.h>
 #include <spdlog/spdlog.h>
 
+#include <atomic>
+#include <ctime>
 #include <filesystem>
 #include <ranges>
 #include <regex>
 #include <tl/enumerate.hpp>
 #include <tl/to.hpp>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include "util/dvlab_string.hpp"
 
 namespace dvlab {
+
+namespace detail {
+
+std::atomic<int> g_command_sigint_count{0};
+std::atomic<std::time_t> g_command_sigint_time{0};
+
+constexpr int sigint_force_quit_strikes = 2;
+constexpr std::time_t sigint_strike_reset_seconds = 2;
+
+void reset_command_sigint_strikes() {
+    g_command_sigint_count.store(0, std::memory_order_relaxed);
+    g_command_sigint_time.store(0, std::memory_order_relaxed);
+}
+
+}  // namespace detail
+
+void CommandLineInterface::reset_command_sigint_strikes() {
+    detail::reset_command_sigint_strikes();
+}
 
 constexpr size_t dofile_stack_limit = 256;
 
@@ -222,10 +247,39 @@ bool dvlab::CommandLineInterface::add_variables_from_dofiles(std::filesystem::pa
  */
 void dvlab::CommandLineInterface::sigint_handler(int signum) {
     if (_listening_for_inputs) {
+        detail::reset_command_sigint_strikes();
         _println_if_echo("");
         _clear_read_buffer_and_print_prompt();
     } else if (!_command_threads.empty()) {
-        // there is an executing command
+        auto const now = std::time(nullptr);
+        auto const prev_time =
+            detail::g_command_sigint_time.exchange(now, std::memory_order_relaxed);
+        auto count = detail::g_command_sigint_count.load(std::memory_order_relaxed);
+        if (prev_time != 0 && (now - prev_time) > detail::sigint_strike_reset_seconds) {
+            count = 0;
+        }
+        count = detail::g_command_sigint_count.fetch_add(1, std::memory_order_relaxed) + 1;
+
+        if (count >= detail::sigint_force_quit_strikes) {
+#ifndef _WIN32
+            char const msg[] = "\nForced quit.\n";
+            if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {
+            }
+            _exit(128 + signum);
+#else
+            exit(128 + signum);
+#endif
+        }
+
+#ifndef _WIN32
+        if (count == 1) {
+            char const msg[] =
+                "\nInterrupting command... (press Ctrl+C again to quit qsyn)\n";
+            if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {
+            }
+        }
+#endif
+
         _command_threads.top().request_stop();
     } else {
         spdlog::critical("Failed to handle the SIGINT signal. Exiting...");

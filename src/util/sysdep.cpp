@@ -10,6 +10,9 @@
 #include <limits.h>
 
 #include <array>
+#include <cerrno>
+#include <chrono>
+#include <thread>
 
 #include "spdlog/spdlog.h"
 #ifdef __linux__
@@ -20,16 +23,66 @@
 #include <windows.h>
 #endif
 
+#ifndef _WIN32
+#include <signal.h>
+#include <sys/wait.h>
+#endif
+
+bool stop_requested();
+
 namespace dvlab {
 
 namespace utils {
+
+namespace {
+
+int wait_for_child(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return 1;
+}
+
+void terminate_child_process_group(pid_t pid) {
+    kill(-pid, SIGINT);
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        int status = 0;
+        auto const waited = waitpid(pid, &status, WNOHANG);
+        if (waited == pid) {
+            return;
+        }
+        if (waited < 0 && errno != EINTR) {
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
+    kill(-pid, SIGKILL);
+    while (waitpid(pid, nullptr, 0) < 0 && errno == EINTR) {
+    }
+}
+
+}  // namespace
 
 bool python_package_exists(std::string_view package_name) {
     if (!is_uv_available()) {
         spdlog::error("`uv` is required to for this command. Please install `uv` first.");
         return false;
     }
-    return system(fmt::format("uv pip show {} > /dev/null 2>&1", package_name).c_str()) == 0;
+    return run_shell_command_interruptible(
+               fmt::format("uv pip show {} > /dev/null 2>&1", package_name)) == 0;
+}
+
+bool pdflatex_exists() {
+    return run_shell_command_interruptible("pdflatex --version > /dev/null 2>&1") == 0;
 }
 
 std::filesystem::path get_qsyn_executable_dir() {
@@ -68,7 +121,60 @@ std::optional<std::filesystem::path> get_qsyn_config_dir() {
 }
 
 bool is_uv_available() {
-    return system("uv --version > /dev/null 2>&1") == 0;
+    return run_shell_command_interruptible("uv --version > /dev/null 2>&1") == 0;
+}
+
+int run_shell_command_interruptible(std::string const& shell_command) {
+#ifndef _WIN32
+    pid_t const pid = fork();
+    if (pid < 0) {
+        std::perror("fork");
+        return -1;
+    }
+    if (pid == 0) {
+        setpgid(0, 0);
+        execl("/bin/sh", "sh", "-c", shell_command.c_str(), static_cast<char*>(nullptr));
+        _exit(127);
+    }
+
+    if (setpgid(pid, pid) != 0 && errno != EACCES) {
+        std::perror("setpgid");
+    }
+
+    int status = 0;
+    while (true) {
+        auto const waited = waitpid(pid, &status, WNOHANG);
+        if (waited == pid) {
+            if (WIFEXITED(status)) {
+                return WEXITSTATUS(status);
+            }
+            if (WIFSIGNALED(status)) {
+                return 128 + WTERMSIG(status);
+            }
+            return 1;
+        }
+        if (waited < 0 && errno != EINTR) {
+            std::perror("waitpid");
+            kill(-pid, SIGKILL);
+            while (waitpid(pid, nullptr, 0) < 0 && errno == EINTR) {
+            }
+            return -1;
+        }
+
+        if (stop_requested()) {
+            terminate_child_process_group(pid);
+            auto const code = wait_for_child(pid);
+            if (code == 128 + SIGINT || code == 130) {
+                return 130;
+            }
+            return code >= 0 ? code : 130;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
+#else
+    return system(shell_command.c_str());
+#endif
 }
 
 int uv_run_script(std::string_view script_path, std::vector<std::string> args) {
@@ -88,7 +194,12 @@ int uv_run_script(std::string_view script_path, std::vector<std::string> args) {
         // inform the user.
     }
 
-    return system(fmt::format("uv run --project {} {} {}", executable_dir.string(), script_path, fmt::join(args, " ")).c_str());
+    auto const cmd = fmt::format(
+        "uv run --project {} {} {}",
+        executable_dir.string(),
+        script_path,
+        fmt::join(args, " "));
+    return run_shell_command_interruptible(cmd);
 }
 }  // namespace utils
 
