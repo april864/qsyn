@@ -41,7 +41,6 @@ public:
     }
 
     // Basic access method
-    std::string get_type_str() const;
     Operation const& get_operation() const;
     void set_operation(Operation const& op);
     size_t get_id() const { return _id; }

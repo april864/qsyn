@@ -127,7 +127,7 @@ void QCir::print_circuit_diagram(spdlog::level::level_enum lvl) const {
         _id_to_gates.empty()
             ? 0
             : std::ranges::max(_id_to_gates | std::views::values | std::views::transform([](auto const& gate) {
-                                   return gate->get_operation().get_base_name().size();
+                                   return gate->get_operation().get_type().size();
                                }));
 
     auto const max_time =
@@ -140,7 +140,7 @@ void QCir::print_circuit_diagram(spdlog::level::level_enum lvl) const {
         while (current != nullptr) {
             DVLAB_ASSERT(last_time <= times.at(current->get_id()),
                          "Gate time should not be smaller than last time!!");
-            auto repr = current->get_operation().get_base_name();
+            auto repr = current->get_operation().get_type();
             line += fmt::format(
                 "{0}-{1:>{2}}({3:>{4}})-",
                 std::string((4 + max_repr_width + id_print_width) * (times.at(current->get_id()) - last_time - 1), '-'),

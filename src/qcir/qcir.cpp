@@ -435,7 +435,7 @@ std::unordered_map<std::string, size_t> get_gate_statistics(QCir const& qcir) {
         return gate_counts;
 
     for (auto g : qcir.get_gates()) {
-        auto type = g->get_operation().get_base_name();
+        auto type = g->get_operation().get_type();
         if (gate_counts.contains(type)) {
             gate_counts[type]++;
         } else {

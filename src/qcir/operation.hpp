@@ -16,7 +16,6 @@
 #include <utility>
 
 #include "qcir/qcir.hpp"
-#include "qcir/gate_name.hpp"
 #include "qsyn/qsyn_type.hpp"
 #include "tableau/tableau.hpp"
 #include "tensor/qtensor.hpp"
@@ -40,7 +39,6 @@ namespace detail {
 
 class DummyOperationType {
 public:
-    std::string get_type_str() const { return "DummyOperation"; }
     std::string get_repr() const { return "DummyOperation"; }
     size_t get_num_qubits() const { return 0; }
 };
@@ -82,8 +80,6 @@ public:
 
     std::string get_type() const { return _pimpl->do_get_type(); }
     std::string get_repr() const { return _pimpl->do_get_repr(); }
-    /// Name for matching device calibrations / statistics (``repr`` without ``(...)``).
-    std::string get_base_name() const { return get_type(); }
     size_t get_num_qubits() const { return _pimpl->do_get_num_qubits(); }
 
     friend Operation adjoint(Operation const& op) {

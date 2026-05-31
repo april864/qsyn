@@ -51,10 +51,6 @@ void QCirGate::swap(QCirGate& other) noexcept {
     swap(_qubits, other._qubits);
 }
 
-std::string QCirGate::get_type_str() const {
-    return get_operation().get_base_name();
-}
-
 Operation const& QCirGate::get_operation() const { return *_operation; }
 
 void QCirGate::set_operation(Operation const& op) {
