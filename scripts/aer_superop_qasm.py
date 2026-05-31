@@ -71,7 +71,7 @@ DEFAULT_MAX_QUBITS = 6
 
 
 def load_circuit(path: str) -> QuantumCircuit:
-    """Load a circuit from a .qasm file (IBM / nativized OpenQASM 2)."""
+    """Load a circuit from a .qasm file (IBM / translated OpenQASM 2)."""
     custom = [
         qasm2.CustomInstruction("p", 1, 1, PhaseGate, builtin=True),
         qasm2.CustomInstruction("sx", 0, 1, SXGate, builtin=True),

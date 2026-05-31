@@ -138,7 +138,7 @@ bool initialize_qsyn(
            qsyn::duostra::add_duostra_cmds(cli, qcir_mgr, device_mgr) &&
            qsyn::add_conversion_cmds(cli, qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr) &&
            qsyn::extractor::add_extract_cmds(cli, zxgraph_mgr, qcir_mgr) &&
-           qsyn::qcir::add_qcir_cmds(cli, qcir_mgr) &&
+           qsyn::qcir::add_qcir_cmds(cli, qcir_mgr, device_mgr) &&
            qsyn::tensor::add_tensor_cmds(cli, tensor_mgr) &&
            qsyn::zx::add_zx_cmds(cli, zxgraph_mgr) &&
            qsyn::tableau::add_tableau_command(cli, tableau_mgr) &&

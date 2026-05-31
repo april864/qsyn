@@ -18,14 +18,17 @@
 
 #include "./qcir/optimizer_cmd.hpp"
 #include "./qcir/oracle_cmd.hpp"
+#include "./qcir/translate_qiskit.hpp"
 #include "./qcir/transpile_qiskit_cmd.hpp"
 #include "argparse/arg_parser.hpp"
 #include "argparse/arg_type.hpp"
 #include "cli/cli.hpp"
+#include "cmd/device_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "qcir/basic_gate_type.hpp"
 #include "qcir/qcir.hpp"
 #include "qcir/qcir_equiv.hpp"
+#include "qcir/qcir_esp.hpp"
 #include "qcir/qcir_gate.hpp"
 #include "qcir/qcir_io.hpp"
 #include "qcir/qcir_translate.hpp"
@@ -285,7 +288,7 @@ Command qcir_draw_cmd(QCirMgr const& qcir_mgr) {
         }};
 }
 
-dvlab::Command qcir_print_cmd(QCirMgr const& qcir_mgr) {
+dvlab::Command qcir_print_cmd(QCirMgr const& qcir_mgr, qsyn::device::DeviceMgr const& device_mgr) {
     return {
         "print",
         [](ArgumentParser& parser) {
@@ -309,6 +312,11 @@ dvlab::Command qcir_print_cmd(QCirMgr const& qcir_mgr) {
                     "the ID is not specified, print all gates. When `--verbose` "
                     "is also specified, print the gates' predecessor and "
                     "successor gates");
+            mutex.add_argument<bool>("--esp")
+                .action(store_true)
+                .help(
+                    "print estimated success probability (ESP) using gate and readout "
+                    "errors from the focused device. This option requires a device to be loaded.");
             mutex.add_argument<bool>("-d", "--diagram")
                 .action(store_true)
                 .help(
@@ -318,6 +326,59 @@ dvlab::Command qcir_print_cmd(QCirMgr const& qcir_mgr) {
         [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(qcir_mgr)) {
                 return CmdExecResult::error;
+            }
+
+            if (parser.get<bool>("--esp")) {
+                if (device_mgr.empty()) {
+                    spdlog::error(
+                        "No device loaded. Use `device read` or `device fetch` to load a device first.");
+                    return CmdExecResult::error;
+                }
+
+                std::vector<std::string> unsupported;
+                std::string missing_detail;
+                auto const result = calculate_esp(
+                    *qcir_mgr.get(),
+                    *device_mgr.get(),
+                    unsupported,
+                    missing_detail);
+
+                if (!result.has_value()) {
+                    switch (result.error()) {
+                        case EspError::circuit_qubit_out_of_range:
+                            spdlog::error(
+                                "Circuit uses qubit indices outside the focused device "
+                                "({} qubits)",
+                                device_mgr.get()->get_num_qubits());
+                            break;
+                        case EspError::unsupported_gates:
+                            spdlog::error(
+                                "Circuit contains gates not supported on the device: [{}]",
+                                fmt::join(unsupported, ", "));
+                            spdlog::error(
+                                "Use `qcir translate --qiskit` or `qcir translate <gate_set>` first.");
+                            break;
+                        case EspError::missing_gate_calibration:
+                            spdlog::error(
+                                "Missing gate error calibration for {}",
+                                missing_detail);
+                            break;
+                        case EspError::missing_readout_calibration:
+                            spdlog::error(
+                                "Missing measurement/readout error calibration for {}",
+                                missing_detail);
+                            break;
+                    }
+                    return CmdExecResult::error;
+                }
+
+                fmt::println("Estimated success probability (ESP): {:.6g}", result->esp);
+                fmt::println("  Gates: {} (product of (1 - gate error))", result->num_gates);
+                fmt::println(
+                    "  Measurements: {} (product of (1 - readout error) per circuit qubit)",
+                    result->num_measurements);
+                fmt::println("  Device: {}", device_mgr.get()->get_name());
+                return CmdExecResult::done;
             }
 
             if (parser.parsed("--gate")) {
@@ -576,17 +637,60 @@ dvlab::Command qcir_adjoint_cmd(QCirMgr& qcir_mgr) {
             }};
 }
 
-dvlab::Command qcir_translate_cmd(QCirMgr& qcir_mgr) {
+dvlab::Command qcir_translate_cmd(QCirMgr& qcir_mgr, qsyn::device::DeviceMgr& device_mgr) {
     return {"translate",
             [&](ArgumentParser& parser) {
                 parser.description(
-                    "translate the circuit into a specific gate set");
-                parser.add_argument<std::string>("gate_set")
-                    .help("the specific gate set ('sherbrooke', 'kyiv', 'prague')")
+                    "Translate the circuit into a specific gate set");
+
+                auto mode = parser.add_mutually_exclusive_group().required(true);
+
+                mode.add_argument<std::string>("gate_set")
+                    .required(false)
+                    .help("Built-in gate set ('sherbrooke', 'kyiv', 'prague')")
                     .choices(std::initializer_list<std::string>{"sherbrooke",
                                                                 "kyiv", "prague"});
+
+                mode.add_argument<bool>("--qiskit")
+                    .action(store_true)
+                    .help(
+                        "Translate to a Qiskit backend basis and run connectivity-preserving "
+                        "optimizations (via scripts/translate_and_optimize_qasm.py)");
+
+                parser.add_argument<std::string>("--backend")
+                    .default_value("")
+                    .help(
+                        "IBM/fake backend name (for --qiskit). "
+                        "If omitted, use the focused Device gate set");
+
+                parser.add_argument<bool>("--use-real-backend")
+                    .action(store_true)
+                    .help("Use a real IBM Quantum backend (for --qiskit; needs IBMQ_API_KEY)");
+
+                parser.add_argument<bool>("--no-optimize")
+                    .action(store_true)
+                    .help("Only translate the gate set, skip post-mapping optimizations (for --qiskit)");
             },
-            [=, &qcir_mgr](ArgumentParser const& parser) {
+            [=, &qcir_mgr, &device_mgr](ArgumentParser const& parser) {
+                if (parser.get<bool>("--qiskit")) {
+                    auto backend = parser.get<std::string>("--backend");
+                    std::optional<std::string> backend_opt;
+                    if (!backend.empty()) {
+                        backend_opt = std::move(backend);
+                    }
+                    return translate_qiskit(
+                        qcir_mgr,
+                        device_mgr,
+                        backend_opt,
+                        parser.get<bool>("--use-real-backend"),
+                        parser.get<bool>("--no-optimize"));
+                }
+
+                if (!parser.parsed("gate_set")) {
+                    spdlog::error("Specify a gate_set or --qiskit");
+                    return CmdExecResult::error;
+                }
+
                 auto const gate_set  = parser.get<std::string>("gate_set");
                 auto translated_qcir = translate(*qcir_mgr.get(), gate_set);
                 if (!translated_qcir) {
@@ -657,7 +761,7 @@ Command qcir_equiv_cmd(QCirMgr& qcir_mgr) {
 
 Command qcir_to_basic_cmd(QCirMgr& qcir_mgr);
 
-Command qcir_cmd(QCirMgr& qcir_mgr) {
+Command qcir_cmd(QCirMgr& qcir_mgr, qsyn::device::DeviceMgr& device_mgr) {
     auto cmd = dvlab::utils::mgr_root_cmd(qcir_mgr);
 
     cmd.add_subcommand("qcir-cmd-group", dvlab::utils::mgr_list_cmd(qcir_mgr));
@@ -670,13 +774,13 @@ Command qcir_cmd(QCirMgr& qcir_mgr) {
     cmd.add_subcommand("qcir-cmd-group", qcir_tensor_product_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_read_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_write_cmd(qcir_mgr));
-    cmd.add_subcommand("qcir-cmd-group", qcir_print_cmd(qcir_mgr));
+    cmd.add_subcommand("qcir-cmd-group", qcir_print_cmd(qcir_mgr, device_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_draw_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_adjoint_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_gate_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_qubit_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_optimize_cmd(qcir_mgr));
-    cmd.add_subcommand("qcir-cmd-group", qcir_translate_cmd(qcir_mgr));
+    cmd.add_subcommand("qcir-cmd-group", qcir_translate_cmd(qcir_mgr, device_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_oracle_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_equiv_cmd(qcir_mgr));
     cmd.add_subcommand("qcir-cmd-group", qcir_to_basic_cmd(qcir_mgr));
@@ -684,8 +788,8 @@ Command qcir_cmd(QCirMgr& qcir_mgr) {
     return cmd;
 }
 
-bool add_qcir_cmds(dvlab::CommandLineInterface& cli, QCirMgr& qcir_mgr) {
-    if (!cli.add_command(qcir_cmd(qcir_mgr))) {
+bool add_qcir_cmds(dvlab::CommandLineInterface& cli, QCirMgr& qcir_mgr, qsyn::device::DeviceMgr& device_mgr) {
+    if (!cli.add_command(qcir_cmd(qcir_mgr, device_mgr))) {
         spdlog::error("Registering \"qcir\" commands fails... exiting");
         return false;
     }

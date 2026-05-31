@@ -9,6 +9,7 @@
 
 #include "./operation.hpp"
 #include "./qcir.hpp"
+#include "./gate_name.hpp"
 
 namespace qsyn::qcir {
 
@@ -48,7 +49,7 @@ inline bool is_clifford(ECRGate const& /* op */) { return true; }
 class PZGate {
 public:
     PZGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "p"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         if (_phase == dvlab::Phase(1)) {
             return "z";
@@ -79,7 +80,7 @@ private:
 class PXGate {
 public:
     PXGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "px"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         if (_phase == dvlab::Phase(1)) {
             return "x";
@@ -110,7 +111,7 @@ private:
 class PYGate {
 public:
     PYGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "py"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         if (_phase == dvlab::Phase(1)) {
             return "y";
@@ -172,7 +173,7 @@ inline bool is_clifford(PYGate const& op) {
 class RZGate {
 public:
     RZGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "rz"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         return fmt::format("rz({})", _phase.get_print_string());
     }
@@ -188,7 +189,7 @@ private:
 class RXGate {
 public:
     RXGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "rx"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         return fmt::format("rx({})", _phase.get_print_string());
     }
@@ -204,7 +205,7 @@ private:
 class RYGate {
 public:
     RYGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return "ry"; }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         return fmt::format("ry({})", _phase.get_print_string());
     }
@@ -237,9 +238,7 @@ public:
         DVLAB_ASSERT(n_ctrls > 0,
                      "Cannot instantiate a control gate with zero controls");
     }
-    std::string get_type() const {
-        return std::string(_n_ctrls, 'c') + _op.get_type();
-    }
+    std::string get_type() const { return gate_base_name(get_repr()); }
     std::string get_repr() const {
         return std::string(_n_ctrls, 'c') + _op.get_repr();
     }

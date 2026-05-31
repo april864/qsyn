@@ -52,7 +52,7 @@ void QCirGate::swap(QCirGate& other) noexcept {
 }
 
 std::string QCirGate::get_type_str() const {
-    return get_operation().get_type();
+    return get_operation().get_base_name();
 }
 
 Operation const& QCirGate::get_operation() const { return *_operation; }

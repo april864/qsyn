@@ -61,7 +61,7 @@ qsyn_commands_str=$(IFS='; '; echo "${qsyn_commands[*]}")
 
 # use qsyn to treespile the circuit
 ./qsyn -c "${qsyn_commands_str}"
-# nativize and optimize the circuit
-# uv run python ./scripts/nativize_and_optimize_qasm.py "${base_out}.qasm" --backend "$backend_name" -o "${base_out}.opt.qasm"
+# translate and optimize the circuit
+# uv run python ./scripts/translate_and_optimize_qasm.py "${base_out}.qasm" --backend "$backend_name" -o "${base_out}.opt.qasm"
 # simulate the circuit
 # uv run python ./scripts/simulate_ideal_vs_noisy_fidelity.py "${base_out}.opt.qasm" --backend "$backend_name" --input-all-zero

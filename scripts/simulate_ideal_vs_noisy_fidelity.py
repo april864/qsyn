@@ -13,8 +13,8 @@ Usage:
   python simulate_ideal_vs_noisy_fidelity.py circuit.qasm --backend ibmq_manila  # real backend, needs IBMQ token
   python simulate_ideal_vs_noisy_fidelity.py circuit.qasm --ibmq-calibration wip/torino_sub.json
 
-For connectivity-preserving gate nativization and optimization, run
-  nativize_and_optimize_qasm.py circuit.qasm --backend <name> -o circuit.opt.qasm
+For connectivity-preserving gate translation and optimization, run
+  translate_and_optimize_qasm.py circuit.qasm --backend <name> -o circuit.opt.qasm
 first, then pass the resulting .qasm to this script.
 """
 
@@ -57,7 +57,7 @@ except ImportError:
 def load_circuit(path: str) -> QuantumCircuit:
     """Load a circuit from a .qasm file."""
     # Qiskit's qasm2 uses the paper (arXiv) qelib1.inc, which does not define 'p', 'sx', or 'u'.
-    # Add them as custom builtins so OpenQASM 2 from IBM backends and nativized output load.
+    # Add them as custom builtins so OpenQASM 2 from IBM backends and translated output load.
     custom = [
         qasm2.CustomInstruction("p", 1, 1, PhaseGate, builtin=True),
         qasm2.CustomInstruction("sx", 0, 1, SXGate, builtin=True),
