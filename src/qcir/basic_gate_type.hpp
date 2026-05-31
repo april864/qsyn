@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include "./gate_name.hpp"
 #include "./operation.hpp"
 #include "./qcir.hpp"
-#include "./gate_name.hpp"
 
 namespace qsyn::qcir {
 
@@ -49,8 +49,7 @@ inline bool is_clifford(ECRGate const& /* op */) { return true; }
 class PZGate {
 public:
     PZGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
-    std::string get_repr() const {
+    std::string get_type() const {
         if (_phase == dvlab::Phase(1)) {
             return "z";
         }
@@ -66,7 +65,14 @@ public:
         if (_phase == dvlab::Phase(-1, 4)) {
             return "tdg";
         }
-        return fmt::format("p({})", _phase.get_print_string());
+        return "p";
+    }
+    std::string get_repr() const {
+        auto type = get_type();
+        if (type == "p") {
+            return gate_repr(type, _phase.get_print_string());
+        }
+        return type;
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -80,8 +86,7 @@ private:
 class PXGate {
 public:
     PXGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
-    std::string get_repr() const {
+    std::string get_type() const {
         if (_phase == dvlab::Phase(1)) {
             return "x";
         }
@@ -97,7 +102,14 @@ public:
         if (_phase == dvlab::Phase(-1, 4)) {
             return "txdg";
         }
-        return fmt::format("px({})", _phase.get_print_string());
+        return "px";
+    }
+    std::string get_repr() const {
+        auto type = get_type();
+        if (type == "px") {
+            return gate_repr(type, _phase.get_print_string());
+        }
+        return type;
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -111,8 +123,7 @@ private:
 class PYGate {
 public:
     PYGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
-    std::string get_repr() const {
+    std::string get_type() const {
         if (_phase == dvlab::Phase(1)) {
             return "y";
         }
@@ -128,7 +139,14 @@ public:
         if (_phase == dvlab::Phase(-1, 4)) {
             return "tydg";
         }
-        return fmt::format("py({})", _phase.get_print_string());
+        return "py";
+    }
+    std::string get_repr() const {
+        auto type = get_type();
+        if (type == "py") {
+            return gate_repr(type, _phase.get_print_string());
+        }
+        return type;
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -173,9 +191,9 @@ inline bool is_clifford(PYGate const& op) {
 class RZGate {
 public:
     RZGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
+    std::string get_type() const { return "rz"; }
     std::string get_repr() const {
-        return fmt::format("rz({})", _phase.get_print_string());
+        return gate_repr(get_type(), _phase.get_print_string());
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -189,9 +207,9 @@ private:
 class RXGate {
 public:
     RXGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
+    std::string get_type() const { return "rx"; }
     std::string get_repr() const {
-        return fmt::format("rx({})", _phase.get_print_string());
+        return gate_repr(get_type(), _phase.get_print_string());
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -205,9 +223,9 @@ private:
 class RYGate {
 public:
     RYGate(dvlab::Phase phase) : _phase(phase) {}
-    std::string get_type() const { return gate_base_name(get_repr()); }
+    std::string get_type() const { return "ry"; }
     std::string get_repr() const {
-        return fmt::format("ry({})", _phase.get_print_string());
+        return gate_repr(get_type(), _phase.get_print_string());
     }
     size_t get_num_qubits() const { return 1; }
 
@@ -238,7 +256,9 @@ public:
         DVLAB_ASSERT(n_ctrls > 0,
                      "Cannot instantiate a control gate with zero controls");
     }
-    std::string get_type() const { return gate_base_name(get_repr()); }
+    std::string get_type() const {
+        return std::string(_n_ctrls, 'c') + _op.get_type();
+    }
     std::string get_repr() const {
         return std::string(_n_ctrls, 'c') + _op.get_repr();
     }

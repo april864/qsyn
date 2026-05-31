@@ -1,23 +1,24 @@
 /****************************************************************************
   PackageName  [ qcir ]
-  Synopsis     [ Gate name helpers (base name without phase arguments) ]
+  Synopsis     [ Gate name helpers ]
   Author       [ Design Verification Lab ]
 ****************************************************************************/
 
 #pragma once
+
+#include <fmt/core.h>
 
 #include <string>
 #include <string_view>
 
 namespace qsyn::qcir {
 
-/// Gate name without ``(...)`` phase arguments (e.g. ``rz(π/2)`` → ``rz``).
-inline std::string gate_base_name(std::string_view gate_name) {
-    auto const pos = gate_name.find('(');
-    if (pos == std::string_view::npos) {
-        return std::string(gate_name);
+/// Full gate name: ``type`` or ``type(args)`` when ``args`` is non-empty.
+inline std::string gate_repr(std::string_view gate_type, std::string_view args = {}) {
+    if (args.empty()) {
+        return std::string(gate_type);
     }
-    return std::string(gate_name.substr(0, pos));
+    return fmt::format("{}({})", gate_type, args);
 }
 
 }  // namespace qsyn::qcir

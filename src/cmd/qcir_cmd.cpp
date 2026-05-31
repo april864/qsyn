@@ -641,7 +641,7 @@ dvlab::Command qcir_translate_cmd(QCirMgr& qcir_mgr, qsyn::device::DeviceMgr& de
     return {"translate",
             [&](ArgumentParser& parser) {
                 parser.description(
-                    "Translate the circuit into a specific gate set");
+                    "translate the circuit into a specific gate set");
 
                 auto mode = parser.add_mutually_exclusive_group().required(true);
 
