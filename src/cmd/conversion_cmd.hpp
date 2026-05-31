@@ -7,6 +7,7 @@
 #pragma once
 
 #include "cli/cli.hpp"
+#include "cmd/fham_mgr.hpp"
 #include "cmd/qbham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
@@ -20,6 +21,7 @@ bool add_conversion_cmds(dvlab::CommandLineInterface& cli,
                          tensor::TensorMgr& tensor_mgr,
                          zx::ZXGraphMgr& zxgraph_mgr,
                          tableau::TableauMgr& tableau_mgr,
-                         hamiltonian::QubitHamiltonianMgr& qbham_mgr);
+                         hamiltonian::QubitHamiltonianMgr& qbham_mgr,
+                         hamiltonian::FermionHamiltonianMgr& fham_mgr);
 
 }

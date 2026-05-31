@@ -489,10 +489,10 @@ treespile(
         }
     }
 
-    TreespileResult result{
-        .circuit          = std::move(qcir),
-        .physical_qubits  = use_logical_indices ? layout->physical_qubits : std::vector<size_t>{},
-    };
+    TreespileResult result;
+    result.circuit         = std::move(qcir);
+    result.physical_qubits = use_logical_indices ? layout->physical_qubits : std::vector<size_t>{};
+    result.encoding        = std::make_unique<TernaryTreeMapping>(std::move(tree.value()));
     return result;
 }
 

@@ -15,13 +15,14 @@
 #include "cmd/fham_mgr.hpp"
 #include "device/device_analysis.hpp"
 #include "device/ibmq_devices.hpp"
-#include "hamiltonian/ternarytree/bonsai.hpp"
 #include "hamiltonian/f2q_mappings.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/fham_workspace.hpp"
 #include "hamiltonian/qubit_hamiltonian.hpp"
+#include "hamiltonian/ternarytree/bonsai.hpp"
 #include "hamiltonian/ternarytree/ternary_tree.hpp"
-#include "hamiltonian/ternarytree/treespile.hpp"
 #include "hamiltonian/ternarytree/tree_optimizations.hpp"
+#include "hamiltonian/ternarytree/treespile.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 
@@ -30,6 +31,98 @@ using namespace dvlab::argparse;
 namespace qsyn::hamiltonian {
 
 namespace {
+
+struct FhamQubitizeOutcome {
+    QubitHamiltonian q_ham;
+    bool used_workspace_encoding;
+};
+
+TernaryTree optimize_ternary_tree_mapping(
+    TernaryTree tree,
+    FermionHamiltonian const& f_ham,
+    device::DeviceMgr const& device_mgr,
+    bool optimize1,
+    bool optimize2) {
+    device::Device const* dev_ptr = nullptr;
+    if (!device_mgr.empty() && device_mgr.get()->get_num_qubits() >= f_ham.n_modes()) {
+        dev_ptr = device_mgr.get();
+    }
+    if (optimize1 && optimize2) {
+        fmt::println("Warning: Both -o1 and -o2 specified. Defaulting to -o2 (CNOT proxy count).");
+    }
+    if (optimize2) {
+        fmt::println("Optimizing ternary tree mapping to minimize proxy CNOT count...");
+        return cnot_proxy_optimize_mapping(tree, f_ham, dev_ptr);
+    }
+    if (optimize1) {
+        fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
+        return pauli_weight_optimize_mapping(tree, f_ham, dev_ptr);
+    }
+    return tree;
+}
+
+FhamQubitizeOutcome qubitize_fham_workspace(
+    FhamWorkspace& workspace,
+    device::DeviceMgr const& device_mgr,
+    bool strategy_explicit,
+    std::string const& strategy_str,
+    bool optimize1,
+    bool optimize2) {
+    auto const& f_ham = workspace.hamiltonian;
+
+    if (!strategy_explicit && workspace.encoding != nullptr) {
+        if (auto* tt_enc = dynamic_cast<TernaryTreeMapping*>(workspace.encoding.get())) {
+            if (optimize1 || optimize2) {
+                auto tree           = optimize_ternary_tree_mapping(tt_enc->tree(), f_ham, device_mgr, optimize1, optimize2);
+                workspace.encoding = std::make_unique<TernaryTreeMapping>(std::move(tree));
+            }
+        } else if (optimize1 || optimize2) {
+            fmt::println("Warning: -o1/-o2 only apply to ternary tree encodings; ignoring.");
+        }
+
+        return {qubitize(f_ham, *workspace.encoding), true};
+    }
+
+    auto const strategy = dvlab::str::tolower_string(strategy_explicit ? strategy_str : "jw");
+    if (dvlab::str::is_prefix_of(strategy, "jw")) {
+        workspace.encoding = std::make_unique<JordanWignerMapping>(f_ham.n_modes());
+        return {qubitize(f_ham, *workspace.encoding), false};
+    }
+
+    std::optional<TernaryTree> initial_tree = std::nullopt;
+    device::Device const* dev_ptr           = nullptr;
+
+    if (!device_mgr.empty()) {
+        dev_ptr = device_mgr.get();
+        if (dev_ptr->get_num_qubits() < f_ham.n_modes()) {
+            fmt::println("Warning: Device ({} qubits) is too small for Hamiltonian ({} modes).", dev_ptr->get_num_qubits(), f_ham.n_modes());
+            fmt::println("Using standard ternary tree...");
+            dev_ptr = nullptr;
+        } else {
+            fmt::println("Using device topology to build ternary tree.");
+
+            auto apsp        = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
+            auto tree_result = build_bonsai_ternary_tree(*dev_ptr, apsp, f_ham.n_modes());
+
+            if (tree_result.has_value()) {
+                initial_tree = std::move(tree_result.value());
+            } else {
+                spdlog::warn("Failed to build Bonsai tree (device too small/disconnected?). Using standard ternary tree.");
+            }
+        }
+    }
+
+    if (!initial_tree.has_value()) {
+        if (device_mgr.empty()) {
+            fmt::println("No device. Using standard ternary tree.");
+        }
+        initial_tree = TernaryTree(f_ham.n_modes());
+    }
+
+    auto tree             = optimize_ternary_tree_mapping(std::move(initial_tree.value()), f_ham, device_mgr, optimize1, optimize2);
+    workspace.encoding = std::make_unique<TernaryTreeMapping>(std::move(tree));
+    return {qubitize(f_ham, *workspace.encoding), false};
+}
 
 dvlab::Command fham_read_cmd(FermionHamiltonianMgr& fham_mgr) {
     return dvlab::Command(
@@ -51,7 +144,7 @@ dvlab::Command fham_read_cmd(FermionHamiltonianMgr& fham_mgr) {
             }
 
             size_t new_id = fham_mgr.get_next_id();
-            fham_mgr.add(new_id, std::make_unique<FermionHamiltonian>(std::move(*ferm_opt)));
+            fham_mgr.add(new_id, std::make_unique<FhamWorkspace>(std::move(*ferm_opt)));
             fham_mgr.set_filename(std::filesystem::path{filepath}.stem().string());
 
             return dvlab::CmdExecResult::done;
@@ -66,9 +159,10 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 "Transform the focused fermionic Hamiltonian to a qubit Hamiltonian");
 
             parser.add_argument<std::string>("-s", "--strategy")
-                .default_value("jw")
                 .constraint(choices_allow_prefix({"jw", "ternary_tree"}))
-                .help("Fermion-to-qubit mapping strategy: 'jw' (Jordan-Wigner, default) or 'ternary_tree'");
+                .help(
+                    "Fermion-to-qubit mapping strategy: 'jw' or 'ternary_tree'. "
+                    "If omitted, uses the workspace encoding when present, otherwise Jordan-Wigner");
 
             parser.add_argument<bool>("-o1", "--optimize1")
                 .action(store_true)
@@ -83,73 +177,41 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
                 return dvlab::CmdExecResult::error;
             }
 
-            auto const* f_ham = fham_mgr.get();
+            auto* workspace = fham_mgr.get();
 
-            auto const strategy = parser.get<std::string>("--strategy");
-            bool optimize1       = parser.get<bool>("--optimize1");
-            bool optimize2       = parser.get<bool>("--optimize2");
+            bool const strategy_explicit = parser.parsed("--strategy");
+            bool optimize1               = parser.get<bool>("--optimize1");
+            bool optimize2               = parser.get<bool>("--optimize2");
 
-            QubitHamiltonian q_ham = [&]() {
-                if (strategy == "jw") {
-                    return qubitize(*f_ham, JordanWignerMapping{f_ham->n_modes()});
-                }
-
-                // strategy == "ternary_tree"
-                std::optional<TernaryTree> initial_tree = std::nullopt;
-                device::Device const* dev_ptr           = nullptr;
-
-                if (!device_mgr.empty()) {
-                    dev_ptr = device_mgr.get();
-                    if (dev_ptr->get_num_qubits() < f_ham->n_modes()) {
-                        fmt::println("Warning: Device ({} qubits) is too small for Hamiltonian ({} modes).", dev_ptr->get_num_qubits(), f_ham->n_modes());
-                        fmt::println("Using standard ternary tree...");
-                        dev_ptr = nullptr;
-                    } else {
-                        fmt::println("Using device topology to build ternary tree.");
-
-                        auto apsp        = device::floyd_warshall(*dev_ptr, device::default_floyd_warshall_cost);
-                        auto tree_result = build_bonsai_ternary_tree(*dev_ptr, apsp, f_ham->n_modes());
-
-                        if (tree_result.has_value()) {
-                            initial_tree = std::move(tree_result.value());
-                        } else {
-                            spdlog::warn("Failed to build Bonsai tree (device too small/disconnected?). Using standard ternary tree.");
-                        }
-                    }
-                }
-
-                if (!initial_tree.has_value()) {
-                    if (device_mgr.empty()) {
-                        fmt::println("No device. Using standard ternary tree.");
-                    }
-                    initial_tree = TernaryTree(f_ham->n_modes());
-                }
-                TernaryTree tree = std::move(initial_tree.value());
-
-                if (optimize1 || optimize2) {
-                    if (optimize1 && optimize2) {
-                        fmt::println("Warning: Both -o1 and -o2 specified. Defaulting to -o2 (CNOT proxy count).");
-                    }
-
-                    if (optimize2) {
-                        fmt::println("Optimizing ternary tree mapping to minimize proxy CNOT count...");
-                        tree = cnot_proxy_optimize_mapping(tree, *f_ham, dev_ptr);
-                    } else if (optimize1) {
-                        fmt::println("Optimizing ternary tree mapping to minimize Pauli weight...");
-                        tree = pauli_weight_optimize_mapping(tree, *f_ham, dev_ptr);
-                    }
-                }
-
-                return qubitize(*f_ham, TernaryTreeMapping{std::move(tree)});
-            }();
+            auto const outcome = qubitize_fham_workspace(
+                *workspace,
+                device_mgr,
+                strategy_explicit,
+                strategy_explicit ? parser.get<std::string>("--strategy") : std::string{},
+                optimize1,
+                optimize2);
 
             size_t id = qbham_mgr.get_next_id();
-            qbham_mgr.add(id, std::make_unique<QubitHamiltonian>(std::move(q_ham)));
+            qbham_mgr.add(id, std::make_unique<QubitHamiltonian>(std::move(outcome.q_ham)));
             qbham_mgr.set_filename(fham_mgr.get_filename());
             qbham_mgr.add_procedures(fham_mgr.get_procedures());
 
-            std::string proc_name = strategy == "ternary_tree" ? "fham_qubitize_ternary_tree" : "fham_qubitize_jw";
-            if ((strategy == "ternary_tree" && optimize1) || (strategy == "ternary_tree" && optimize2)) proc_name += "_optimized";
+            std::string proc_name;
+            if (outcome.used_workspace_encoding) {
+                proc_name = dynamic_cast<TernaryTreeMapping const*>(workspace->encoding.get()) != nullptr
+                                ? "fham_qubitize_ternary_tree"
+                                : "fham_qubitize_jw";
+            } else {
+                auto const strategy_str = strategy_explicit ? parser.get<std::string>("--strategy") : "jw";
+                auto const strategy     = dvlab::str::tolower_string(strategy_str);
+                proc_name                 = dvlab::str::is_prefix_of(strategy, "ternary_tree")
+                                                ? "fham_qubitize_ternary_tree"
+                                                : "fham_qubitize_jw";
+            }
+            if ((optimize1 || optimize2) &&
+                dynamic_cast<TernaryTreeMapping const*>(workspace->encoding.get()) != nullptr) {
+                proc_name += "_optimized";
+            }
             qbham_mgr.add_procedure(proc_name);
 
             fmt::println("Transformed focused fermionic Hamiltonian to QubitHamiltonian with ID: {}", id);
@@ -162,6 +224,114 @@ dvlab::Command fham_qubitize_cmd(FermionHamiltonianMgr& fham_mgr, QubitHamiltoni
 
 namespace {
 
+void print_encoding_summary(FhamWorkspace const& workspace) {
+    if (workspace.encoding == nullptr) {
+        fmt::println("Encoding: none");
+        return;
+    }
+    if (dynamic_cast<JordanWignerMapping const*>(workspace.encoding.get()) != nullptr) {
+        fmt::println("Encoding: Jordan-Wigner ({} modes)", workspace.encoding->n_modes());
+    } else if (dynamic_cast<TernaryTreeMapping const*>(workspace.encoding.get()) != nullptr) {
+        fmt::println("Encoding: ternary tree ({} modes)", workspace.encoding->n_modes());
+    } else {
+        fmt::println("Encoding: present ({} modes)", workspace.encoding->n_modes());
+    }
+}
+
+void print_encoding_detail(FhamWorkspace const& workspace) {
+    if (workspace.encoding == nullptr) {
+        fmt::println("No encoding attached to this workspace.");
+        return;
+    }
+    if (auto const* jw = dynamic_cast<JordanWignerMapping const*>(workspace.encoding.get())) {
+        fmt::println("Jordan-Wigner mapping ({} modes)", jw->n_modes());
+        fmt::println("Clifford: identity on {} qubits", jw->n_modes());
+    } else if (auto const* tt = dynamic_cast<TernaryTreeMapping const*>(workspace.encoding.get())) {
+        fmt::println("Ternary tree mapping ({} modes)", tt->n_modes());
+        fmt::println("{}", to_string(tt->tree()));
+    } else {
+        fmt::println("Unknown encoding type ({} modes)", workspace.encoding->n_modes());
+    }
+}
+
+dvlab::Command fham_bonsai_cmd(device::DeviceMgr& device_mgr, FermionHamiltonianMgr& fham_mgr) {
+    return dvlab::Command(
+        "bonsai",
+        [](ArgumentParser& parser) {
+            parser.description(
+                "Build a Bonsai ternary tree on the current device for the focused "
+                "fermionic Hamiltonian and attach it as the workspace encoding");
+            parser.add_argument<size_t>("-r", "--root-qubit-id")
+                .help("ID of the qubit to root the tree at. If not specified, a center of the device coupling graph will be the root.");
+            parser.add_argument<bool>("-e", "--exhaustive")
+                .action(store_true)
+                .help("Exhaustively search for the best ternary tree, stemming from all qubits. This flag is ignored if --root-qubit-id is specified.");
+            parser.add_argument<std::string>("--cost-fn")
+                .constraint(choices_allow_prefix({"log_success_rate", "default"}))
+                .default_value("default")
+                .help("cost function for Floyd-Warshall (used to pick tree center and order)");
+        },
+        [&](ArgumentParser const& parser) {
+            if (device_mgr.empty()) {
+                spdlog::error("No device loaded. Read or fetch a device first.");
+                return dvlab::CmdExecResult::error;
+            }
+
+            if (!dvlab::utils::mgr_has_data(fham_mgr)) {
+                spdlog::error("No fermionic Hamiltonian loaded. Read or create one first.");
+                return dvlab::CmdExecResult::error;
+            }
+
+            auto* workspace        = fham_mgr.get();
+            auto const& f_ham      = workspace->hamiltonian;
+            auto const n_qubits    = f_ham.n_modes();
+            auto const& device     = *device_mgr.get();
+            auto const cost_fn_str = parser.get<std::string>("--cost-fn");
+            auto cost_fn           = device::default_floyd_warshall_cost;
+            if (dvlab::str::is_prefix_of(dvlab::str::tolower_string(cost_fn_str), "log_success_rate")) {
+                cost_fn = device::log_success_rate_floyd_warshall_cost;
+            }
+            bool exhaustive = parser.get<bool>("--exhaustive");
+
+            if (device.get_num_qubits() < n_qubits) {
+                spdlog::error(
+                    "Device ({} qubits) is too small for Hamiltonian ({} modes).",
+                    device.get_num_qubits(),
+                    n_qubits);
+                return dvlab::CmdExecResult::error;
+            }
+
+            auto const apsp = device::floyd_warshall(device, cost_fn);
+            auto tree       = [&]() {
+                if (parser.parsed("--root-qubit-id")) {
+                    auto const root_qubit_id = parser.get<size_t>("--root-qubit-id");
+                    return build_bonsai_ternary_tree(root_qubit_id, device, apsp, n_qubits);
+                }
+                if (exhaustive) {
+                    return build_bonsai_ternary_tree_exhaustive(device, apsp, n_qubits);
+                }
+                return build_bonsai_ternary_tree(device, apsp, n_qubits);
+            }();
+
+            if (!tree.has_value()) {
+                switch (tree.error()) {
+                    case BonsaiFailReason::not_enough_qubits:
+                        spdlog::error("Failed to build Bonsai ternary tree: not enough qubits in the device");
+                        spdlog::error("(Potentially disconnected device?)");
+                        break;
+                    case BonsaiFailReason::invalid_root_qubit:
+                        spdlog::error("Failed to build Bonsai ternary tree: invalid root qubit");
+                        break;
+                }
+                return dvlab::CmdExecResult::error;
+            }
+
+            workspace->encoding = std::make_unique<TernaryTreeMapping>(std::move(tree.value()));
+
+            return dvlab::CmdExecResult::done;
+        });
+}
+
 dvlab::Command fham_print_cmd(FermionHamiltonianMgr const& fham_mgr) {
     return dvlab::Command{
         "print",
@@ -170,16 +340,25 @@ dvlab::Command fham_print_cmd(FermionHamiltonianMgr const& fham_mgr) {
             parser.add_argument<bool>("-v", "--verbose")
                 .action(store_true)
                 .help("display each term of the hamiltonian");
+            parser.add_argument<bool>("--encoding")
+                .action(store_true)
+                .help("display the workspace F2Q encoding in detail");
         },
         [&](ArgumentParser const& parser) {
             if (!dvlab::utils::mgr_has_data(fham_mgr)) {
                 return dvlab::CmdExecResult::error;
             }
 
-            auto const* f_ham = fham_mgr.get();
+            auto const* workspace = fham_workspace(fham_mgr);
+            auto const* f_ham     = &workspace->hamiltonian;
             fmt::println("Fermionic Hamiltonian ({} modes, {} terms)",
                          f_ham->n_modes(),
                          f_ham->get_terms().size());
+            print_encoding_summary(*workspace);
+
+            if (parser.parsed("--encoding")) {
+                print_encoding_detail(*workspace);
+            }
 
             if (!parser.parsed("--verbose")) {
                 return dvlab::CmdExecResult::done;
@@ -242,7 +421,7 @@ dvlab::Command fham_treespile_cmd(
             }
 
             auto const& device = *device_mgr.get();
-            auto const* f_ham  = fham_mgr.get();
+            auto const& f_ham  = fham_mgr.get()->hamiltonian;
 
             auto const n_steps = parser.get<size_t>("n-steps");
             if (n_steps == 0) {
@@ -252,8 +431,8 @@ dvlab::Command fham_treespile_cmd(
 
             auto const time        = parser.get<double>("time");
             auto const cost_fn_str = parser.get<std::string>("--cost-fn");
-            bool optimize1          = parser.get<bool>("--optimize1");
-            bool optimize2          = parser.get<bool>("--optimize2");
+            bool optimize1         = parser.get<bool>("--optimize1");
+            bool optimize2         = parser.get<bool>("--optimize2");
             bool exhaustive        = parser.get<bool>("--exhaustive");
             bool use_logical_index = parser.get<bool>("--logical-index");
             auto cost_fn           = device::default_floyd_warshall_cost;
@@ -261,8 +440,8 @@ dvlab::Command fham_treespile_cmd(
                 cost_fn = device::log_success_rate_floyd_warshall_cost;
             }
 
-            auto const result = treespile(
-                *f_ham, device, time, n_steps, cost_fn, optimize1, optimize2, exhaustive, use_logical_index);
+            auto result = treespile(
+                f_ham, device, time, n_steps, cost_fn, optimize1, optimize2, exhaustive, use_logical_index);
 
             if (!result.has_value()) {
                 auto const reason = result.error();
@@ -283,8 +462,10 @@ dvlab::Command fham_treespile_cmd(
                 return dvlab::CmdExecResult::error;
             }
 
-            auto circuit      = std::move(result.value().circuit);
-            auto const new_id = qcir_mgr.get_next_id();
+            auto& treespile_out      = result.value();
+            fham_mgr.get()->encoding = std::move(treespile_out.encoding);
+            auto circuit             = std::move(treespile_out.circuit);
+            auto const new_id        = qcir_mgr.get_next_id();
 
             qcir_mgr.add(new_id, std::make_unique<qcir::QCir>(std::move(circuit)));
             qcir_mgr.set_filename(fham_mgr.get_filename());
@@ -301,7 +482,7 @@ dvlab::Command fham_treespile_cmd(
                     return dvlab::CmdExecResult::error;
                 }
 
-                auto const& physical_qubits = result.value().physical_qubits;
+                auto const& physical_qubits = treespile_out.physical_qubits;
                 auto sub                    = device.induced_subdevice(physical_qubits);
                 if (!sub.has_value()) {
                     switch (sub.error()) {
@@ -381,6 +562,7 @@ dvlab::Command fham_cmd(
     cmd.add_subcommand("fham-cmd-group", dvlab::utils::mgr_copy_cmd(fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_read_cmd(fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_qubitize_cmd(fham_mgr, qbham_mgr, device_mgr));
+    cmd.add_subcommand("fham-cmd-group", fham_bonsai_cmd(device_mgr, fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_treespile_cmd(device_mgr, fham_mgr, qcir_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_print_cmd(fham_mgr));
 

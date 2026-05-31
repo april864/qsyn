@@ -14,6 +14,7 @@
 #include "argparse/arg_parser.hpp"
 #include "argparse/arg_type.hpp"
 #include "cli/cli.hpp"
+#include "cmd/fham_mgr.hpp"
 #include "cmd/qbham_mgr.hpp"
 #include "cmd/qcir_mgr.hpp"
 #include "cmd/tableau_mgr.hpp"
@@ -27,7 +28,8 @@
 #include "convert/zxgraph_to_tensor.hpp"
 #include "extractor/extract.hpp"
 #include "qcir/qcir.hpp"
-#include "tableau/stabilizer_tableau.hpp"
+#include "hamiltonian/f2q_mappings.hpp"
+#include "tableau/tableau.hpp"
 #include "tensor/decomposer.hpp"
 #include "tensor/solovay_kitaev.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
@@ -403,11 +405,78 @@ Command convert_from_qbham_cmd(hamiltonian::QubitHamiltonianMgr& qbham_mgr, tens
         }};
 }
 
+Command convert_from_fham_cmd(hamiltonian::FermionHamiltonianMgr& fham_mgr, tableau::TableauMgr& tableau_mgr) {
+    return {
+        "fham",
+        [&](ArgumentParser& parser) {
+            parser.description("convert from FermionHamiltonian to other data structures");
+
+            auto subparsers = parser.add_subparsers("to-type")
+                                  .required(true);
+
+            auto to_tableau = subparsers.add_parser("tableau")
+                                  .description(
+                                      "convert the focused fermionic Hamiltonian to a Clifford Tableau");
+            to_tableau.add_argument<bool>("--encoding")
+                .action(store_true)
+                .help(
+                    "Convert the F2Q encoding attached to the focused FHam (e.g. from "
+                    "`fham treespile` or `fham qubitize`) to a Clifford operator");
+        },
+        [&](ArgumentParser const& parser) {
+            if (!dvlab::utils::mgr_has_data(fham_mgr)) {
+                return CmdExecResult::error;
+            }
+
+            auto const to_type = parser.get<std::string>("to-type");
+            if (to_type != "tableau") {
+                spdlog::error("The conversion is not supported yet!!");
+                return CmdExecResult::error;
+            }
+
+            if (!parser.get<bool>("--encoding")) {
+                spdlog::error(
+                    "Full FHam-to-Tableau conversion is not supported yet. "
+                    "Use `convert fham tableau --encoding` to export the workspace encoding.");
+                return CmdExecResult::error;
+            }
+
+            auto const* workspace = fham_mgr.get();
+            if (workspace->encoding == nullptr) {
+                spdlog::error(
+                    "No encoding on focused FHam {}. Run `fham treespile` or `fham qubitize` first.",
+                    fham_mgr.focused_id());
+                return CmdExecResult::error;
+            }
+
+            auto clifford = workspace->encoding->to_clifford();
+
+            auto const n_qubits = clifford.n_qubits();
+            auto const tabl_id  = tableau_mgr.get_next_id();
+            spdlog::info(
+                "Converting FHam {} encoding to Tableau {} ({} qubits)...",
+                fham_mgr.focused_id(),
+                tabl_id,
+                n_qubits);
+
+            tableau_mgr.add(
+                tabl_id,
+                std::make_unique<tableau::Tableau>(
+                    std::initializer_list<tableau::SubTableau>{std::move(clifford)}));
+            tableau_mgr.set_filename(fham_mgr.get_filename());
+            tableau_mgr.add_procedures(fham_mgr.get_procedures());
+            tableau_mgr.add_procedure("FHAM2TABL");
+
+            return CmdExecResult::done;
+        }};
+}
+
 Command conversion_cmd(QCirMgr& qcir_mgr,
                        qsyn::tensor::TensorMgr& tensor_mgr,
                        qsyn::zx::ZXGraphMgr& zxgraph_mgr,
                        tableau::TableauMgr& tableau_mgr,
-                       hamiltonian::QubitHamiltonianMgr& qbham_mgr) {
+                       hamiltonian::QubitHamiltonianMgr& qbham_mgr,
+                       hamiltonian::FermionHamiltonianMgr& fham_mgr) {
     auto cmd = dvlab::Command{
         "convert",
         [&](ArgumentParser& parser) {
@@ -423,6 +492,7 @@ Command conversion_cmd(QCirMgr& qcir_mgr,
     cmd.add_subcommand("from-type", convert_from_tensor_cmd(tensor_mgr, qcir_mgr));
     cmd.add_subcommand("from-type", convert_from_tableau_cmd(tableau_mgr, qcir_mgr));
     cmd.add_subcommand("from-type", convert_from_qbham_cmd(qbham_mgr, tensor_mgr));
+    cmd.add_subcommand("from-type", convert_from_fham_cmd(fham_mgr, tableau_mgr));
 
     return cmd;
 }
@@ -461,8 +531,9 @@ bool add_conversion_cmds(dvlab::CommandLineInterface& cli,
                          qsyn::tensor::TensorMgr& tensor_mgr,
                          qsyn::zx::ZXGraphMgr& zxgraph_mgr,
                          tableau::TableauMgr& tableau_mgr,
-                         hamiltonian::QubitHamiltonianMgr& qbham_mgr) {
-    if (!(cli.add_command(conversion_cmd(qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr)) &&
+                         hamiltonian::QubitHamiltonianMgr& qbham_mgr,
+                         hamiltonian::FermionHamiltonianMgr& fham_mgr) {
+    if (!(cli.add_command(conversion_cmd(qcir_mgr, tensor_mgr, zxgraph_mgr, tableau_mgr, qbham_mgr, fham_mgr)) &&
           cli.add_command(sk_decompose_cmd(tensor_mgr, qcir_mgr)) &&
           cli.add_alias("qc2zx", "convert qcir zx") &&
           cli.add_alias("qc2ts", "convert qcir tensor") &&
@@ -471,7 +542,8 @@ bool add_conversion_cmds(dvlab::CommandLineInterface& cli,
           cli.add_alias("ts2qc", "convert tensor qcir") &&
           cli.add_alias("qc2tabl", "convert qcir tableau") &&
           cli.add_alias("tabl2qc", "convert tableau qcir") &&
-          cli.add_alias("qbham2ts", "convert qbham tensor"))) {
+          cli.add_alias("qbham2ts", "convert qbham tensor") &&
+          cli.add_alias("fham2tabl", "convert fham tableau --encoding"))) {
         fmt::println(stderr, "Registering \"conversion\" commands fails... exiting");
         return false;
     }

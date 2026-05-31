@@ -12,6 +12,7 @@
 #include "device/device.hpp"
 #include "device/device_analysis.hpp"
 #include "hamiltonian/fermionic_hamiltonian.hpp"
+#include "hamiltonian/f2q_mappings.hpp"
 #include "qcir/qcir.hpp"
 #include "ternary_tree.hpp"
 
@@ -28,6 +29,15 @@ struct TreespileResult {
     qcir::QCir circuit;
     /// Populated when ``use_logical_indices`` is true: ``physical_qubits[logical]`` on the parent device.
     std::vector<QubitIdType> physical_qubits;
+    /// Fermion-to-qubit encoding used for this treespile (stored on the FHam workspace).
+    std::unique_ptr<FermionToQubitMapping> encoding;
+
+    TreespileResult() = default;
+    TreespileResult(TreespileResult&&) noexcept            = default;
+    TreespileResult& operator=(TreespileResult&&) noexcept = default;
+    TreespileResult(TreespileResult const&)                = delete;
+    TreespileResult& operator=(TreespileResult const&)     = delete;
+    ~TreespileResult()                                     = default;
 };
 
 tl::expected<TreespileResult, TreespileFailReason>

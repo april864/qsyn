@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include "tableau/pauli_product_trait.hpp"
+#include "ternarytree/tt_mappings.hpp"
 
 namespace qsyn::hamiltonian {
 
@@ -58,9 +59,16 @@ JordanWignerMapping::map(std::size_t p, bool is_creation) const {
                                      : std::complex<double>(0, -0.5))};
 }
 
-std::vector<ComplexPauliTerm>
-TernaryTreeMapping::map(std::size_t p, bool is_creation) const {
-    return _mapper.get_pauli_str(p, is_creation);
+std::unique_ptr<FermionToQubitMapping> JordanWignerMapping::clone() const {
+    return std::make_unique<JordanWignerMapping>(n_modes());
+}
+
+tableau::StabilizerTableau JordanWignerMapping::to_clifford() const {
+    return tableau::StabilizerTableau(n_modes());
+}
+
+tableau::StabilizerTableau TernaryTreeMapping::to_clifford() const {
+    return ::qsyn::hamiltonian::to_clifford(_mapper);
 }
 
 QubitHamiltonian qubitize(FermionHamiltonian const& f_hamilt,
