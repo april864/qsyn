@@ -567,7 +567,19 @@ dvlab::Command fham_eval_cmd(
                 spdlog::error("Please load a device and a fermionic Hamiltonian first.");
                 return dvlab::CmdExecResult::error;
             }
-            evaluate_proxy_cost_termwise(
+            // evaluate_proxy_termwise_depth(
+            //     *fham_mgr.get(),
+            //     *device_mgr.get(),
+            //     parser.get<std::string>("--output"),
+            //     parser.get<size_t>("--samples")
+            // );
+            // evaluate_proxy_termwise_fidelity(
+            //     *fham_mgr.get(),
+            //     *device_mgr.get(),
+            //     parser.get<std::string>("--output"),
+            //     parser.get<size_t>("--samples")
+            // );
+            evaluate_proxy_cost(
                 *fham_mgr.get(),
                 *device_mgr.get(),
                 parser.get<std::string>("--output"),

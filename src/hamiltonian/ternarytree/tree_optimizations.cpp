@@ -208,6 +208,30 @@ double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, 
     return total_cost;
 }
 
+// NEW: proxy infidelity cost function
+double infidelity_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
+    TreeOracle oracle(tree, apsp);
+    double total_infidelity = 0.0;
+
+    TernaryTreeMapping mapping(tree);
+    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
+
+    for (const auto& term : q_ham) {
+        std::vector<size_t> active_nodes;
+        for (size_t i = 0; i < term.n_qubits(); ++i) {
+            if (!term.is_i(i)) {
+                active_nodes.push_back(i);
+            }
+        }
+        
+        // Note: sum because apsp is log fidelities
+        total_infidelity += oracle.get_subtree_weight(active_nodes);
+    }
+    
+    return total_infidelity;
+}
+
+// TODO: combine SA functions below
 /**
  * @brief Optimizes a fermion-to-qubit mapping to minimize Pauli weight.
  * @param initial_tree Initital mapping.

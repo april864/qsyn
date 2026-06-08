@@ -59,7 +59,13 @@ void evaluate_proxy_cost(
     std::string const& output_csv,
     size_t samples);
 
-void evaluate_proxy_cost_termwise(
+void evaluate_proxy_termwise_depth(
+    FermionHamiltonian const& hamiltonian,
+    device::Device const& device,
+    std::string const& output_csv,
+    size_t samples);
+
+void evaluate_proxy_termwise_fidelity(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
     std::string const& output_csv,
