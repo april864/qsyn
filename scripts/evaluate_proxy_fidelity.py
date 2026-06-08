@@ -6,13 +6,13 @@ import os
 import numpy as np
 
 from qiskit import QuantumCircuit
-from qiskit_ibm_runtime.fake_provider import FakeTorino
+from qiskit_ibm_runtime.fake_provider import FakeFez
 import nativize_and_optimize_qasm as opt
 
 csv_file = "proxy_evaluation_fidelity.csv"
 target_samples = 500
-backend_name = "fake_torino"
-benchmark = "benchmark/fham/electron-4.fham"
+backend_name = "fake_fez"
+benchmark = "benchmark/fham/fermi-hubbard-18.fham"
 
 if os.path.exists(csv_file):
     os.remove(csv_file)
@@ -38,7 +38,7 @@ process.wait()
 
 print("\nC++ Compilation complete. Optimizing and evaluating via Qiskit...")
 
-backend = FakeTorino()
+backend = FakeFez()
 target = backend.target
 
 actual_fidelities = []
@@ -101,7 +101,12 @@ try:
     if df_filtered['TotalProxyCost'].nunique() > 1:
         z = np.polyfit(df_filtered['TotalProxyCost'], df_filtered['TotalActualCost'], 1)
         p = np.poly1d(z)
-        plt.plot(df_filtered['TotalProxyCost'], p(df_filtered['TotalProxyCost']), color='red', linestyle='-', linewidth=2, label=f"Trendline (y = {z[0]:.2f}x + {z[1]:.2f})")
+
+        correlation_matrix = np.corrcoef(df_filtered['TotalProxyCost'], df_filtered['TotalActualCost'])
+        r_val = correlation_matrix[0, 1]
+        r_squared = r_val ** 2
+
+        plt.plot(df_filtered['TotalProxyCost'], p(df_filtered['TotalProxyCost']), color='red', linestyle='-', linewidth=2, label=f"Trendline (y = {z[0]:.2f}x + {z[1]:.2f})\n$R^2$={r_squared:.4f}")
         plt.legend()
 
     plt.tight_layout()

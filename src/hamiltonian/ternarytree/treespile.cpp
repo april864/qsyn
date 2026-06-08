@@ -457,7 +457,7 @@ treespile(
     if (optimize1) {
         tree = pauli_weight_optimize_mapping(*tree, hamiltonian, &device);
     } else if (optimize2) {
-        tree = cnot_proxy_optimize_mapping(*tree, hamiltonian, &device);
+        tree = infidelity_proxy_optimize_mapping(*tree, hamiltonian, &device);
     }
 
     auto const mapping = TernaryTreeMapping(tree.value());
@@ -580,7 +580,7 @@ void evaluate_proxy_cost(
         bool routable = true;
         try {
             for (const auto& term : q_ham) {
-                synthesize_term(term, tree, apsp, device, 1.0, qcir);
+                synthesize_term(term, tree, apsp, device, 1.0, qcir, nullptr);
             }
         } catch (...) {
             routable = false;
@@ -779,7 +779,7 @@ void evaluate_proxy_termwise_depth(
 
                 // Calculate contribution to full circuit
                 size_t gates_before = full_qcir.get_gates().size();
-                synthesize_term(term, tree, apsp, device, 1.0, full_qcir);
+                synthesize_term(term, tree, apsp, device, 1.0, full_qcir, nullptr);
                 size_t gates_after = full_qcir.get_gates().size();
 
                 auto const& all_gates = full_qcir.get_gates();
@@ -938,7 +938,7 @@ void evaluate_proxy_termwise_fidelity(
 
                 // Calculate actual fidelity
                 size_t gates_before = full_qcir.get_gates().size();
-                synthesize_term(term, tree, apsp, device, 1.0, full_qcir);
+                synthesize_term(term, tree, apsp, device, 1.0, full_qcir, nullptr);
                 size_t gates_after = full_qcir.get_gates().size();
 
                 double actual_cost = 0.0;
@@ -947,7 +947,6 @@ void evaluate_proxy_termwise_fidelity(
                 for (size_t g = gates_before; g < gates_after; ++g) {
                     auto qubits = all_gates[g]->get_qubits();
                     
-                    // TODO: Only count CNOT gates?
                     if (qubits.size() == 2) {
                         size_t q0 = qubits[0];
                         size_t q1 = qubits[1];

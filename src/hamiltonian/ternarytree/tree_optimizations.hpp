@@ -44,6 +44,11 @@ double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, 
 // Calculates proxy infidelity by multiplying infidelities of each gate in circuit
 double infidelity_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp);
 
+TernaryTree infidelity_proxy_optimize_mapping(
+    TernaryTree const& initial_tree,
+    const FermionHamiltonian& f_ham,
+    const qsyn::device::Device* device);
+
 TernaryTree pauli_weight_optimize_mapping(
     TernaryTree const& initial_tree,
     const FermionHamiltonian& f_ham,

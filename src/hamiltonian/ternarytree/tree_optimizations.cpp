@@ -233,6 +233,85 @@ double infidelity_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham,
 
 // TODO: combine SA functions below
 /**
+ * @brief Optimizes a fermion-to-qubit mapping to minimize proxy infidelity cost.
+ * @param initial_tree Initial mapping.
+ * @param f_ham Fermionic Hamiltonian to be mapped.
+ * @param device Hardware device (required for noise data).
+ * @return Optimized TernaryTree mapping.
+ */
+TernaryTree infidelity_proxy_optimize_mapping(
+    TernaryTree const& initial_tree,
+    const FermionHamiltonian& f_ham,
+    const qsyn::device::Device* device) {
+    
+    using util::SimulatedAnnealing;
+
+    if (!device) {
+        throw std::runtime_error("Device is required for infidelity proxy optimization");
+    }
+
+    // For noise-aware APSP
+    auto noise_aware_cost = [](qsyn::device::Device::QubitPair const& edge, qsyn::device::Device const& dev) -> float {
+        auto const& edge_gates = dev.get_gate_info(edge);
+        auto const& gate_set = dev.get_gate_set();
+        float error_rate = 1.0f;
+        
+        for (auto const& info : edge_gates) {
+            std::string gate_name = dvlab::str::tolower_string(gate_set[info.gate_idx]);
+            if (gate_name == "cx" || gate_name == "cnot" || gate_name == "ecr" || gate_name == "cz") {
+                error_rate = info.error; 
+                break; 
+            }   
+        }
+        
+        if (error_rate >= 1.0f || error_rate < 0.0f) {
+            return std::numeric_limits<float>::infinity();
+        }
+        return -std::log(1.0f - error_rate); 
+    };
+
+    auto const fidelity_apsp = device::floyd_warshall(*device, noise_aware_cost);
+
+    std::function<double(TernaryTree const&)> const wrapped_cost_fn =
+        [&](TernaryTree const& tree) -> double { return infidelity_cost(tree, f_ham, fidelity_apsp); };
+        
+    TreeRotator rotator;
+
+    using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
+
+    auto const mutate_fns = std::vector<MutateFn>{
+        [&](TernaryTree& tree) {
+            rotator.cp_leaf_move(&tree, *device);
+        },
+        [&](TernaryTree& tree) {
+            rotator.root_change(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.pauli_shuffle(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.mode_association_swap(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.majorana_braiding_change(&tree);
+        },
+    };
+
+    auto const sa = SimulatedAnnealing<TernaryTree, double>(
+        /* init_temp    = */ 20.0,
+        /* cooling_rate = */ 0.99995,
+        /* min_temp     = */ 0.3,
+        /* cost_fn      = */ wrapped_cost_fn,
+        /* mutate_fns   = */ mutate_fns);
+
+    auto const [best_tree, best_cost] = sa(initial_tree);
+
+    fmt::println("Final optimized infidelity cost: {} \n", best_cost);
+
+    return best_tree;
+}
+
+/**
  * @brief Optimizes a fermion-to-qubit mapping to minimize Pauli weight.
  * @param initial_tree Initital mapping.
  * @param f_ham Fermionic Hamiltonian to be mapped.
@@ -281,7 +360,7 @@ TernaryTree pauli_weight_optimize_mapping(
 
     auto const [best_tree, best_cost] = sa(initial_tree);
 
-    fmt::println("Final Optimized Pauli Weight: {} \n", best_cost);
+    fmt::println("Final optimized Pauli weight: {} \n", best_cost);
 
     return best_tree;
 }
@@ -338,7 +417,7 @@ TernaryTree cnot_proxy_optimize_mapping(
 
     auto const [best_tree, best_cost] = sa(initial_tree);
 
-    fmt::println("Final Optimized Pauli Weight: {} \n", best_cost);
+    fmt::println("Final optimized 'CNOT' count: {} \n", best_cost);
 
     return best_tree;
 }
