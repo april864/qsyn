@@ -1,5 +1,5 @@
-## USE: Evaluates termwise contribution to overall circuit fidelity, as well as termwise proxy fidelity
-## Change fham_cmd.cpp eval func to use evaluate_proxy_termwise_fidelity
+## Evaluates termwise contribution to overall circuit fidelity, as well as termwise proxy fidelity
+## TO USE: Change fham_cmd.cpp eval func to use evaluate_proxy_termwise_fidelity
 
 import pandas as pd
 import matplotlib.pyplot as plt

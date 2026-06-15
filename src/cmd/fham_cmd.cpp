@@ -23,6 +23,7 @@
 #include "hamiltonian/ternarytree/ternary_tree.hpp"
 #include "hamiltonian/ternarytree/tree_optimizations.hpp"
 #include "hamiltonian/ternarytree/treespile.hpp"
+#include "hamiltonian/ternarytree/proxy_eval.hpp"
 #include "qcir/qcir.hpp"
 #include "util/data_structure_manager_common_cmd.hpp"
 
@@ -554,7 +555,7 @@ dvlab::Command fham_eval_cmd(
     return dvlab::Command(
         "eval-proxy",
         [](ArgumentParser& parser) {
-            parser.description("Evaluate the CNOT proxy cost function by generating random tree mappings.");
+            parser.description("Evaluate the proxy cost function by generating random tree mappings.");
             parser.add_argument<size_t>("-s", "--samples")
                 .default_value(10)
                 .help("Number of random trees to sample");
@@ -607,7 +608,7 @@ dvlab::Command fham_cmd(
     cmd.add_subcommand("fham-cmd-group", fham_bonsai_cmd(device_mgr, fham_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_treespile_cmd(device_mgr, fham_mgr, qcir_mgr));
     cmd.add_subcommand("fham-cmd-group", fham_print_cmd(fham_mgr));
-    cmd.add_subcommand("fham-cmd-group", fham_eval_cmd(device_mgr, fham_mgr)); // NEW
+    cmd.add_subcommand("fham-cmd-group", fham_eval_cmd(device_mgr, fham_mgr));
 
     return cmd;
 }

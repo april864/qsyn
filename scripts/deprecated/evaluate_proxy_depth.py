@@ -1,5 +1,5 @@
-## USE: Evaluates termwise contribution to overall circuit depth, as well as termwise proxy depth
-## Change fham_cmd.cpp eval func to use evaluate_proxy_termwise_depth
+## Evaluates termwise contribution to overall circuit depth, as well as termwise proxy depth
+## TO USE: Change fham_cmd.cpp eval func to use evaluate_proxy_termwise_depth
 
 import pandas as pd
 import matplotlib.pyplot as plt

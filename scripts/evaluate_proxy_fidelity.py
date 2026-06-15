@@ -1,3 +1,5 @@
+## Compares proxy fidelity with final circuit fidelity
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import subprocess

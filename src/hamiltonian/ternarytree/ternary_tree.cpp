@@ -187,7 +187,6 @@ void TernaryTree::remap_node_ids(std::span<size_t const> slot_of_label) {
     }
 }
 
-// NEW
 bool TernaryTree::has_edge(QubitIdType u, QubitIdType v) const {
     auto it_u = _qubit_to_node.find(u);
     auto it_v = _qubit_to_node.find(v);

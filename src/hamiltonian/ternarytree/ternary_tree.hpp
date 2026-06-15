@@ -109,7 +109,6 @@ public:
     const std::vector<TernaryLeg*>& get_legs() const { return _legs; }
     TernaryLeg* get_leg(size_t i) const { return _legs.at(i); }
 
-    // NEW
     bool has_edge(QubitIdType u, QubitIdType v) const;
 
     size_t num_qubits() const { return _num_qubits; }

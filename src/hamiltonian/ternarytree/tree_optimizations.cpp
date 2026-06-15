@@ -1,6 +1,6 @@
 /*
   PackageName  [ hamiltonian ]
-  Synopsis     [ Optimizations for ternary tree represenation ]
+  Synopsis     [ Proxy functions and simulated annealing to optimize ternary tree ]
   Author       [ April Wang (april864) ]
 */
 
@@ -21,21 +21,6 @@
 #include "util/simulated_annealing.hpp"
 
 namespace qsyn::hamiltonian {
-
-double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham) {
-    TernaryTreeMapping mapping(tt);
-    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
-
-    double total_weight = 0;
-    for (const auto& term : q_ham) {
-        for (size_t i = 0; i < term.n_qubits(); ++i) {
-            if (!term.is_i(i)) {
-                total_weight += 1.0;
-            }
-        }
-    }
-    return total_weight;
-}
 
 void TreeOracle::dfs(const TernaryTree& tree, const dvlab::APSPResult<QubitIdType>& apsp, int& timer,
                      size_t v, size_t p, int current_depth, double cost_from_parent) {
@@ -159,56 +144,9 @@ double TreeOracle::get_subtree_weight(const std::vector<size_t>& nodes) const {
     return total_weight / 2.0;
 }
 
-// // OLD
-// double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
-//     TreeOracle oracle(tree, apsp);
-//     double total_cost = 0.0;
-
-//     for (const auto& term : f_ham.get_terms()) {
-//         std::vector<size_t> active_modes;
-//         for (const auto& op : term.second) {
-//           active_modes.push_back(op.first);
-//         }
-
-//         std::sort(active_modes.begin(), active_modes.end());
-//         active_modes.erase(std::unique(active_modes.begin(), active_modes.end()), active_modes.end());
-
-//         total_cost += oracle.get_subtree_weight(active_modes);
-//         for (size_t mode : active_modes) {
-//             total_cost += oracle.get_tail_weight(mode);
-//         }
-//     }
-//     return total_cost;
-// }
-
-// NEW: qubitizes first to cancel tails
-double fast_tree_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
-    TreeOracle oracle(tree, apsp);
-    double total_cost = 0.0;
-
-    TernaryTreeMapping mapping(tree);
-    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
-
-    // put something here to track each term?
-    for (const auto& term : q_ham) {
-        std::vector<size_t> active_nodes;
-        for (size_t i = 0; i < term.n_qubits(); ++i) {
-            if (!term.is_i(i)) {
-                active_nodes.push_back(i);
-            }
-        }
-        
-        total_cost += oracle.get_subtree_weight(active_nodes);
-
-        // for (size_t node : active_nodes) { // inaccurate
-        //     total_cost += oracle.get_tail_weight(node);
-        // }
-    }
-    
-    return total_cost;
-}
-
-// NEW: proxy infidelity cost function
+// Best proxy: infidelity_cost. Approximates infidelity by multiplying infidelities of two-qubit
+// gates along the interaction path in the ternary tree.
+// TODO: check use of TreeOracle
 double infidelity_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
     TreeOracle oracle(tree, apsp);
     double total_infidelity = 0.0;
@@ -229,6 +167,44 @@ double infidelity_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham,
     }
     
     return total_infidelity;
+}
+
+// Approximates CNOT count across interaction paths in ternary tree
+double cnot_cost(const TernaryTree& tree, const FermionHamiltonian& f_ham, const dvlab::APSPResult<QubitIdType>& apsp) {
+    TreeOracle oracle(tree, apsp);
+    double total_cost = 0.0;
+
+    TernaryTreeMapping mapping(tree);
+    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
+
+    for (const auto& term : q_ham) {
+        std::vector<size_t> active_nodes;
+        for (size_t i = 0; i < term.n_qubits(); ++i) {
+            if (!term.is_i(i)) {
+                active_nodes.push_back(i);
+            }
+        }
+        
+        total_cost += oracle.get_subtree_weight(active_nodes);
+    }
+    
+    return total_cost;
+}
+
+// Counts number of Pauli gates along path in ternary tree.
+double pauli_weight_cost(const TernaryTree& tt, const FermionHamiltonian& f_ham) {
+    TernaryTreeMapping mapping(tt);
+    QubitHamiltonian q_ham = qubitize(f_ham, mapping);
+
+    double total_weight = 0;
+    for (const auto& term : q_ham) {
+        for (size_t i = 0; i < term.n_qubits(); ++i) {
+            if (!term.is_i(i)) {
+                total_weight += 1.0;
+            }
+        }
+    }
+    return total_weight;
 }
 
 // TODO: combine SA functions below
@@ -312,6 +288,63 @@ TernaryTree infidelity_proxy_optimize_mapping(
 }
 
 /**
+ * @brief Optimizes a fermion-to-qubit mapping to minimize proxy cnot count as
+   computed by cnot_cost.
+ * @param initial_tree Initital mapping.
+ * @param f_ham Fermionic Hamiltonian to be mapped.
+ * @param device Hardware device.
+ * @return Optimized TernaryTree mapping.
+ */
+TernaryTree cnot_proxy_optimize_mapping(
+    TernaryTree const& initial_tree,
+    const FermionHamiltonian& f_ham,
+    const qsyn::device::Device* device) {
+    using util::SimulatedAnnealing;
+
+    if (!device) {
+        throw std::runtime_error("Device is required for cnot proxy optimization");
+    }
+
+    auto apsp = device::floyd_warshall(*device);
+    auto const wrapped_cost_fn =
+        [&](TernaryTree const& tree) { return cnot_cost(tree, f_ham, apsp); };
+    TreeRotator rotator;
+
+    using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
+
+    auto const mutate_fns = std::vector<MutateFn>{
+        [&](TernaryTree& tree) {
+            rotator.cp_leaf_move(&tree, *device);
+        },
+        [&](TernaryTree& tree) {
+            rotator.root_change(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.pauli_shuffle(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.mode_association_swap(&tree);
+        },
+        [&](TernaryTree& tree) {
+            rotator.majorana_braiding_change(&tree);
+        },
+    };
+
+    auto const sa = SimulatedAnnealing<TernaryTree, double>(
+        /* init_temp    = */ 20.0,
+        /* cooling_rate = */ 0.99995,
+        /* min_temp     = */ 0.3,
+        /* cost_fn      = */ wrapped_cost_fn,
+        /* mutate_fns   = */ mutate_fns);
+
+    auto const [best_tree, best_cost] = sa(initial_tree);
+
+    fmt::println("Final optimized 'CNOT' count: {} \n", best_cost);
+
+    return best_tree;
+}
+
+/**
  * @brief Optimizes a fermion-to-qubit mapping to minimize Pauli weight.
  * @param initial_tree Initital mapping.
  * @param f_ham Fermionic Hamiltonian to be mapped.
@@ -361,63 +394,6 @@ TernaryTree pauli_weight_optimize_mapping(
     auto const [best_tree, best_cost] = sa(initial_tree);
 
     fmt::println("Final optimized Pauli weight: {} \n", best_cost);
-
-    return best_tree;
-}
-
-/**
- * @brief Optimizes a fermion-to-qubit mapping to minimize proxy cnot count as
-   computed by fast_tree_cost.
- * @param initial_tree Initital mapping.
- * @param f_ham Fermionic Hamiltonian to be mapped.
- * @param device Hardware device.
- * @return Optimized TernaryTree mapping.
- */
-TernaryTree cnot_proxy_optimize_mapping(
-    TernaryTree const& initial_tree,
-    const FermionHamiltonian& f_ham,
-    const qsyn::device::Device* device) {
-    using util::SimulatedAnnealing;
-
-    if (!device) {
-        throw std::runtime_error("Device is required for cnot proxy optimization");
-    }
-
-    auto apsp = device::floyd_warshall(*device);
-    auto const wrapped_cost_fn =
-        [&](TernaryTree const& tree) { return fast_tree_cost(tree, f_ham, apsp); };
-    TreeRotator rotator;
-
-    using MutateFn = SimulatedAnnealing<TernaryTree, double>::MutateFn;
-
-    auto const mutate_fns = std::vector<MutateFn>{
-        [&](TernaryTree& tree) {
-            rotator.cp_leaf_move(&tree, *device);
-        },
-        [&](TernaryTree& tree) {
-            rotator.root_change(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.pauli_shuffle(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.mode_association_swap(&tree);
-        },
-        [&](TernaryTree& tree) {
-            rotator.majorana_braiding_change(&tree);
-        },
-    };
-
-    auto const sa = SimulatedAnnealing<TernaryTree, double>(
-        /* init_temp    = */ 20.0,
-        /* cooling_rate = */ 0.99995,
-        /* min_temp     = */ 0.3,
-        /* cost_fn      = */ wrapped_cost_fn,
-        /* mutate_fns   = */ mutate_fns);
-
-    auto const [best_tree, best_cost] = sa(initial_tree);
-
-    fmt::println("Final optimized 'CNOT' count: {} \n", best_cost);
 
     return best_tree;
 }
