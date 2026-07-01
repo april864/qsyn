@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <tl/expected.hpp>
 #include <vector>
 
@@ -23,7 +24,8 @@ namespace qsyn::hamiltonian {
 void evaluate_proxy_cost(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
-    std::string const& output_csv,
+    std::filesystem::path const& output_dir,
+    std::string const& output_csv_name,
     size_t samples);
 
 void evaluate_proxy_termwise_depth(

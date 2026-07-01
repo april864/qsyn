@@ -556,33 +556,38 @@ dvlab::Command fham_eval_cmd(
         "eval-proxy",
         [](ArgumentParser& parser) {
             parser.description("Evaluate the proxy cost function by generating random tree mappings.");
+            parser.add_argument<std::string>("-d", "--output-dir")
+                .required(true)
+                .help("Directory for proxy evaluation outputs (CSV and sample QASM files)");
             parser.add_argument<size_t>("-s", "--samples")
                 .default_value(10)
                 .help("Number of random trees to sample");
             parser.add_argument<std::string>("-o", "--output")
                 .default_value("proxy_evaluation.csv")
-                .help("Output CSV file name");
+                .help("Output CSV file name within --output-dir");
         },
         [&](ArgumentParser const& parser) {
             if (device_mgr.empty() || !dvlab::utils::mgr_has_data(fham_mgr)) {
                 spdlog::error("Please load a device and a fermionic Hamiltonian first.");
                 return dvlab::CmdExecResult::error;
             }
+            auto const output_dir = std::filesystem::path(parser.get<std::string>("--output-dir"));
             // evaluate_proxy_termwise_depth(
             //     *fham_mgr.get(),
             //     *device_mgr.get(),
-            //     parser.get<std::string>("--output"),
+            //     output_dir / parser.get<std::string>("--output"),
             //     parser.get<size_t>("--samples")
             // );
             // evaluate_proxy_termwise_fidelity(
             //     *fham_mgr.get(),
             //     *device_mgr.get(),
-            //     parser.get<std::string>("--output"),
+            //     output_dir / parser.get<std::string>("--output"),
             //     parser.get<size_t>("--samples")
             // );
             evaluate_proxy_cost(
                 *fham_hamiltonian(fham_mgr),
                 *device_mgr.get(),
+                output_dir,
                 parser.get<std::string>("--output"),
                 parser.get<size_t>("--samples")
             );

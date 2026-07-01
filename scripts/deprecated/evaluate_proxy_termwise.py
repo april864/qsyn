@@ -1,69 +1,101 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+import argparse
 import subprocess
 import sys
-import os
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
-csv_file = "proxy_evaluation.csv"
-target_samples = 100
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CSV_NAME = "proxy_evaluation.csv"
+DEFAULT_SAMPLES = 100
 
-if os.path.exists(csv_file):
-    os.remove(csv_file)
-with open(csv_file, "w") as f:
-    f.write("TermProxyCost,IsolatedCNOTs,CNOTDiff\n")
 
-cli_commands = f"device fetch -f fake_oslo; fham read benchmark/fham/electron-4.fham; fham eval-proxy -s {target_samples} -o {csv_file}"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Deprecated termwise proxy evaluation.")
+    parser.add_argument("output_dir", type=Path, help="Directory for proxy evaluation artifacts")
+    parser.add_argument(
+        "-s",
+        "--samples",
+        type=int,
+        default=DEFAULT_SAMPLES,
+        help=f"Number of random trees to sample (default: {DEFAULT_SAMPLES})",
+    )
+    return parser.parse_args()
 
-print("Compiling circuits and extracting term data in C++...")
 
-process = subprocess.Popen(
-    ["./qsyn", "-c", cli_commands], 
-    stdout=subprocess.PIPE, 
-    stderr=subprocess.STDOUT, 
-    text=True
-)
+def main() -> None:
+    args = parse_args()
+    output_dir = args.output_dir.expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-for line in process.stdout:
-    sys.stdout.write(line)
-    sys.stdout.flush()
-    if "Evaluation saved" in line:
-        process.terminate()
-        break
-        
-process.wait()
+    csv_file = output_dir / CSV_NAME
+    if csv_file.exists():
+        csv_file.unlink()
 
-print("\nEvaluation complete. Graphing...")
+    with csv_file.open("w") as f:
+        f.write("TermProxyCost,IsolatedCNOTs,CNOTDiff\n")
 
-try:
-    df = pd.read_csv(csv_file)
-    
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    cli_commands = (
+        "device fetch -f fake_oslo; "
+        "fham read benchmark/fham/electron-4.fham; "
+        f"fham eval-proxy -d {output_dir} -s {args.samples} -o {CSV_NAME}"
+    )
 
-    # CNOTs from each term
-    ax1.scatter(df['TermProxyCost'], df['IsolatedCNOTs'], alpha=0.05, color='#3498db', s=40)
-    if df['TermProxyCost'].nunique() > 1:
-        z1 = np.polyfit(df['TermProxyCost'], df['IsolatedCNOTs'], 1)
-        ax1.plot(df['TermProxyCost'], np.poly1d(z1)(df['TermProxyCost']), color='#2980b9', lw=2)
-        
-    ax1.set_title(f"2-Qubit Gates from Each Term", fontsize=12, fontweight='bold')
-    ax1.set_xlabel("Term Proxy Cost (Hops)", fontsize=11)
-    ax1.set_ylabel("Physical 2Q Gates Generated", fontsize=11)
-    ax1.grid(True, linestyle='--', alpha=0.7)
+    print("Compiling circuits and extracting term data in C++...")
 
-    # Termwise contribution
-    ax2.scatter(df['TermProxyCost'], df['CNOTDiff'], alpha=0.05, color='#e74c3c', s=40)
-    if df['TermProxyCost'].nunique() > 1:
-        z2 = np.polyfit(df['TermProxyCost'], df['CNOTDiff'], 1)
-        ax2.plot(df['TermProxyCost'], np.poly1d(z2)(df['TermProxyCost']), color='#c0392b', lw=2)
-        
-    ax2.set_title(f"Termwise 2Q GateContribution", fontsize=12, fontweight='bold')
-    ax2.set_xlabel("Term Proxy Cost (Hops)", fontsize=11)
-    ax2.grid(True, linestyle='--', alpha=0.7)
+    process = subprocess.Popen(
+        [str(REPO_ROOT / "qsyn"), "-c", cli_commands],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=REPO_ROOT,
+    )
 
-    plt.suptitle("Term-Level Contributions", fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.show()
+    for line in process.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        if "Evaluation saved" in line:
+            process.terminate()
+            break
 
-except Exception as e:
-    print(f"\nFAILED TO GRAPH DATA: {e}")
+    process.wait()
+
+    print("\nEvaluation complete. Graphing...")
+
+    try:
+        df = pd.read_csv(csv_file)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+
+        ax1.scatter(df["TermProxyCost"], df["IsolatedCNOTs"], alpha=0.05, color="#3498db", s=40)
+        if df["TermProxyCost"].nunique() > 1:
+            z1 = np.polyfit(df["TermProxyCost"], df["IsolatedCNOTs"], 1)
+            ax1.plot(df["TermProxyCost"], np.poly1d(z1)(df["TermProxyCost"]), color="#2980b9", lw=2)
+
+        ax1.set_title("2-Qubit Gates from Each Term", fontsize=12, fontweight="bold")
+        ax1.set_xlabel("Term Proxy Cost (Hops)", fontsize=11)
+        ax1.set_ylabel("Physical 2Q Gates Generated", fontsize=11)
+        ax1.grid(True, linestyle="--", alpha=0.7)
+
+        ax2.scatter(df["TermProxyCost"], df["CNOTDiff"], alpha=0.05, color="#e74c3c", s=40)
+        if df["TermProxyCost"].nunique() > 1:
+            z2 = np.polyfit(df["TermProxyCost"], df["CNOTDiff"], 1)
+            ax2.plot(df["TermProxyCost"], np.poly1d(z2)(df["TermProxyCost"]), color="#c0392b", lw=2)
+
+        ax2.set_title("Termwise 2Q GateContribution", fontsize=12, fontweight="bold")
+        ax2.set_xlabel("Term Proxy Cost (Hops)", fontsize=11)
+        ax2.grid(True, linestyle="--", alpha=0.7)
+
+        plt.suptitle("Term-Level Contributions", fontsize=16, fontweight="bold")
+        plt.tight_layout()
+        plt.show()
+
+    except Exception as e:
+        print(f"\nFAILED TO GRAPH DATA: {e}")
+        raise SystemExit(1) from e
+
+
+if __name__ == "__main__":
+    main()

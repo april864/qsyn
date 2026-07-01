@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
 #include <fstream>
 #include <random>
 
@@ -35,8 +36,17 @@ namespace qsyn::hamiltonian {
 void evaluate_proxy_cost(
     FermionHamiltonian const& hamiltonian,
     device::Device const& device,
-    std::string const& output_csv,
+    std::filesystem::path const& output_dir,
+    std::string const& output_csv_name,
     size_t samples) {
+
+    std::error_code ec;
+    if (!std::filesystem::create_directories(output_dir, ec) && !std::filesystem::is_directory(output_dir)) {
+        spdlog::error("Failed to create output directory \"{}\": {}", output_dir.string(), ec.message());
+        return;
+    }
+
+    auto const output_csv = output_dir / output_csv_name;
 
     auto const apsp = floyd_warshall(device, device::default_floyd_warshall_cost);
 
@@ -123,7 +133,7 @@ void evaluate_proxy_cost(
             continue;
         }
 
-        std::string qasm_file = fmt::format("sample_{}.qasm", i);
+        auto const qasm_file = output_dir / fmt::format("sample_{}.qasm", i);
         qcir.write_qasm(qasm_file);
 
         csv << i << "," << proxy_cost << "\n";
